@@ -892,8 +892,11 @@ try {
             Invoke-AuditModule -ModuleName "Power Platform" -ModulePath (Join-Path $modulesPath "Invoke-PowerPlatform-Audit.ps1") -Parameters $powerPlatformParams
         }
 
-        # Placeholder for remaining cloud modules (to be implemented)
-        Write-AuditLog "Compliance module pending implementation" -Level Warning
+        # Compliance & Security Module
+        $complianceParams = @{
+            OutputFolder = Join-Path $script:AuditOutputFolder "RawData"
+        }
+        Invoke-AuditModule -ModuleName "Compliance & Security" -ModulePath (Join-Path $modulesPath "Invoke-Compliance-Audit.ps1") -Parameters $complianceParams
     }
     
     # Export metadata
