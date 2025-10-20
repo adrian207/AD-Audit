@@ -715,6 +715,24 @@ try {
         Write-Host "Check error log for details: $script:ErrorLog" -ForegroundColor Yellow
     }
     
+    # Generate HTML reports
+    Write-Host ""
+    Write-Host "Generating HTML reports..." -ForegroundColor Cyan
+    try {
+        $reportScript = Join-Path $PSScriptRoot "Modules\New-AuditReport.ps1"
+        if (Test-Path $reportScript) {
+            & $reportScript -OutputFolder $script:AuditOutputFolder -CompanyName $CompanyName -ReportTitle $ReportTitle
+            Write-AuditLog "HTML reports generated successfully" -Level Success
+        }
+        else {
+            Write-AuditLog "Report generator not found: $reportScript" -Level Warning
+        }
+    }
+    catch {
+        Write-AuditLog "Failed to generate HTML reports: $_" -Level Warning
+        Write-Host "Warning: HTML report generation failed" -ForegroundColor Yellow
+    }
+    
     Write-AuditLog "Audit completed successfully" -Level Success
 }
 catch {
