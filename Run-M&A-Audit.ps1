@@ -872,8 +872,14 @@ try {
         }
         Invoke-AuditModule -ModuleName "Microsoft Entra ID" -ModulePath (Join-Path $modulesPath "Invoke-EntraID-Audit.ps1") -Parameters $entraIDParams
 
+        # Exchange Online Module
+        $exchangeParams = @{
+            OutputFolder = Join-Path $script:AuditOutputFolder "RawData"
+        }
+        Invoke-AuditModule -ModuleName "Exchange Online" -ModulePath (Join-Path $modulesPath "Invoke-Exchange-Audit.ps1") -Parameters $exchangeParams
+
         # Placeholder for remaining cloud modules (to be implemented)
-        Write-AuditLog "Exchange, SharePoint, Teams, Power Platform, Compliance modules pending implementation" -Level Warning
+        Write-AuditLog "SharePoint, Teams, Power Platform, Compliance modules pending implementation" -Level Warning
     }
     
     # Export metadata
