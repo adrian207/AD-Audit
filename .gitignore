@@ -1,0 +1,44 @@
+# M&A Audit Tool - Git Ignore
+
+# Output folders (audit results)
+Output/
+Logs/
+
+# PowerShell temporary files
+*.tmp
+*.temp
+
+# Windows thumbnail cache
+Thumbs.db
+desktop.ini
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# User-specific files
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Test data
+test-output/
+*.test
+
+# Credentials (never commit!)
+*.credential
+*.cred
+secrets.json
+
+# Archives
+*.7z
+*.zip
+
+# Large CSV outputs (optional - uncomment if you don't want to track test outputs)
+# *.csv
+
+# Encrypted files
+*.enc
+*.encrypted
+
