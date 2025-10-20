@@ -866,8 +866,14 @@ try {
     
     # Cloud modules (only if not OnlyAD)
     if (-not $OnlyAD) {
-        # Placeholder for cloud modules (to be implemented)
-        Write-AuditLog "Cloud modules (Entra ID, Exchange, SharePoint, Teams, Power Platform, Compliance) pending implementation" -Level Warning
+        # Entra ID Module
+        $entraIDParams = @{
+            OutputFolder = Join-Path $script:AuditOutputFolder "RawData"
+        }
+        Invoke-AuditModule -ModuleName "Microsoft Entra ID" -ModulePath (Join-Path $modulesPath "Invoke-EntraID-Audit.ps1") -Parameters $entraIDParams
+
+        # Placeholder for remaining cloud modules (to be implemented)
+        Write-AuditLog "Exchange, SharePoint, Teams, Power Platform, Compliance modules pending implementation" -Level Warning
     }
     
     # Export metadata
