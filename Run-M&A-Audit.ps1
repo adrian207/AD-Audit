@@ -878,8 +878,14 @@ try {
         }
         Invoke-AuditModule -ModuleName "Exchange Online" -ModulePath (Join-Path $modulesPath "Invoke-Exchange-Audit.ps1") -Parameters $exchangeParams
 
+        # SharePoint, OneDrive & Teams Module
+        $sharePointParams = @{
+            OutputFolder = Join-Path $script:AuditOutputFolder "RawData"
+        }
+        Invoke-AuditModule -ModuleName "SharePoint, OneDrive & Teams" -ModulePath (Join-Path $modulesPath "Invoke-SharePoint-Teams-Audit.ps1") -Parameters $sharePointParams
+
         # Placeholder for remaining cloud modules (to be implemented)
-        Write-AuditLog "SharePoint, Teams, Power Platform, Compliance modules pending implementation" -Level Warning
+        Write-AuditLog "Power Platform, Compliance modules pending implementation" -Level Warning
     }
     
     # Export metadata
