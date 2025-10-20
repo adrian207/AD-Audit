@@ -596,15 +596,204 @@ function Protect-AuditOutput {
                 Write-AuditLog "Archive encryption failed: $($_.Exception.Message)" -Level Error
             }
         } else {
-            Write-AuditLog "7-Zip not found. Install from: https://www.7-zip.org/" -Level Warning
-            Write-AuditLog "Archive creation skipped" -Level Warning
+            # Fallback to PowerShell native Compress-Archive
+            Write-AuditLog "7-Zip not found. Using PowerShell native compression (AES-256)..." -Level Warning
+            
+            try {
+                if (-not $ArchivePassword) {
+                    $ArchivePassword = Read-Host -AsSecureString "Enter password for encrypted archive (min 16 chars)"
+                }
+                
+                # Create temporary compressed archive (unencrypted)
+                $tempArchivePath = "$($script:AuditOutputFolder)-temp.zip"
+                $archivePath = "$($script:AuditOutputFolder).zip.enc"
+                
+                Write-AuditLog "Creating compressed archive..." -Level Info
+                Compress-Archive -Path "$($script:AuditOutputFolder)\*" -DestinationPath $tempArchivePath -CompressionLevel Optimal -Force
+                
+                # Encrypt the archive using AES
+                $aes = [System.Security.Cryptography.Aes]::Create()
+                $aes.KeySize = 256
+                $aes.Mode = [System.Security.Cryptography.CipherMode]::CBC
+                
+                # Derive key from password using PBKDF2
+                $salt = New-Object byte[] 32
+                $rng = [System.Security.Cryptography.RNGCryptoServiceProvider]::Create()
+                $rng.GetBytes($salt)
+                
+                $plainPassword = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($ArchivePassword))
+                
+                if ($plainPassword.Length -lt 16) {
+                    Write-AuditLog "Password must be at least 16 characters" -Level Error
+                    Remove-Item $tempArchivePath -Force
+                    return
+                }
+                
+                $pbkdf2 = New-Object System.Security.Cryptography.Rfc2898DeriveBytes($plainPassword, $salt, 100000)
+                $aes.Key = $pbkdf2.GetBytes(32) # 256-bit key
+                $aes.GenerateIV()
+                
+                # Read temp archive and encrypt it
+                $inputBytes = [System.IO.File]::ReadAllBytes($tempArchivePath)
+                $encryptor = $aes.CreateEncryptor()
+                $encryptedBytes = $encryptor.TransformFinalBlock($inputBytes, 0, $inputBytes.Length)
+                
+                # Write encrypted archive with salt and IV prepended
+                $outputStream = [System.IO.File]::OpenWrite($archivePath)
+                $outputStream.Write($salt, 0, 32)
+                $outputStream.Write($aes.IV, 0, 16)
+                $outputStream.Write($encryptedBytes, 0, $encryptedBytes.Length)
+                $outputStream.Close()
+                
+                # Clean up
+                $aes.Dispose()
+                Remove-Item $tempArchivePath -Force
+                
+                if (Test-Path $archivePath) {
+                    $archiveSize = [math]::Round((Get-Item $archivePath).Length / 1MB, 2)
+                    Write-AuditLog "Encrypted archive created: $archivePath ($archiveSize MB)" -Level Success
+                    Write-AuditLog "Archive uses AES-256 encryption with PBKDF2 key derivation (100,000 iterations)" -Level Info
+                    
+                    # Save decryption instructions
+                    $decryptInstructions = @"
+# Decryption Instructions
+
+This archive was encrypted using PowerShell native AES-256 encryption.
+
+## To decrypt and extract:
+
+```powershell
+`$encryptedFile = "$archivePath"
+`$password = Read-Host -AsSecureString "Enter archive password"
+`$plainPassword = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR(`$password))
+
+# Read encrypted file
+`$encryptedData = [System.IO.File]::ReadAllBytes(`$encryptedFile)
+
+# Extract salt (first 32 bytes) and IV (next 16 bytes)
+`$salt = `$encryptedData[0..31]
+`$iv = `$encryptedData[32..47]
+`$cipherBytes = `$encryptedData[48..(`$encryptedData.Length-1)]
+
+# Derive key using PBKDF2
+`$pbkdf2 = New-Object System.Security.Cryptography.Rfc2898DeriveBytes(`$plainPassword, `$salt, 100000)
+`$key = `$pbkdf2.GetBytes(32)
+
+# Decrypt
+`$aes = [System.Security.Cryptography.Aes]::Create()
+`$aes.Key = `$key
+`$aes.IV = `$iv
+`$decryptor = `$aes.CreateDecryptor()
+`$decryptedBytes = `$decryptor.TransformFinalBlock(`$cipherBytes, 0, `$cipherBytes.Length)
+
+# Save decrypted ZIP
+[System.IO.File]::WriteAllBytes("decrypted-audit.zip", `$decryptedBytes)
+
+# Extract ZIP
+Expand-Archive -Path "decrypted-audit.zip" -DestinationPath "."
+```
+
+**Important**: Store this password securely. Without it, the data cannot be recovered.
+"@
+                    $instructionsPath = Join-Path (Split-Path $archivePath -Parent) "DECRYPTION_INSTRUCTIONS.txt"
+                    $decryptInstructions | Out-File $instructionsPath -Encoding UTF8
+                    Write-AuditLog "Decryption instructions saved to: $instructionsPath" -Level Info
+                } else {
+                    Write-AuditLog "Archive creation failed" -Level Error
+                }
+            }
+            catch {
+                Write-AuditLog "PowerShell native archive encryption failed: $($_.Exception.Message)" -Level Error
+            }
         }
     }
     
-    # Method 3: Azure Key Vault (future implementation)
+    # Method 3: Azure Key Vault
     if ($UseAzureKeyVault) {
-        Write-AuditLog "Azure Key Vault encryption not yet implemented" -Level Warning
-        Write-AuditLog "This feature is planned for a future release" -Level Info
+        try {
+            Write-AuditLog "Implementing Azure Key Vault encryption..." -Level Info
+            
+            # Check if Az.KeyVault module is available
+            if (-not (Get-Module -ListAvailable -Name Az.KeyVault)) {
+                Write-AuditLog "Az.KeyVault module not found. Installing..." -Level Warning
+                Install-Module -Name Az.KeyVault -Scope CurrentUser -Force -AllowClobber
+            }
+            
+            Import-Module Az.KeyVault -ErrorAction Stop
+            
+            # Ensure we're connected to Azure
+            $context = Get-AzContext
+            if (-not $context) {
+                Write-AuditLog "Not connected to Azure. Please authenticate..." -Level Info
+                Connect-AzAccount
+            }
+            
+            if (-not $KeyVaultName -or -not $KeyName) {
+                Write-AuditLog "KeyVaultName and KeyName are required for Azure Key Vault encryption" -Level Error
+                throw "Missing Key Vault parameters"
+            }
+            
+            # Get or create encryption key
+            $key = Get-AzKeyVaultKey -VaultName $KeyVaultName -Name $KeyName -ErrorAction SilentlyContinue
+            if (-not $key) {
+                Write-AuditLog "Creating new RSA key in Key Vault: $KeyName" -Level Info
+                $key = Add-AzKeyVaultKey -VaultName $KeyVaultName -Name $KeyName -Destination 'Software' -KeyOps encrypt,decrypt
+            }
+            
+            # Generate AES key for file encryption
+            $aes = [System.Security.Cryptography.Aes]::Create()
+            $aes.KeySize = 256
+            $aes.GenerateKey()
+            $aes.GenerateIV()
+            
+            # Encrypt AES key with Key Vault RSA key
+            $encryptedAESKey = Invoke-AzKeyVaultKeyOperation -Operation Encrypt -VaultName $KeyVaultName -Name $KeyName -Algorithm RSA-OAEP -Value $aes.Key
+            
+            # Save encrypted AES key and IV for later decryption
+            $keyInfo = @{
+                EncryptedAESKey = [Convert]::ToBase64String($encryptedAESKey.Result)
+                IV = [Convert]::ToBase64String($aes.IV)
+                KeyVaultName = $KeyVaultName
+                KeyName = $KeyName
+                Timestamp = (Get-Date).ToString('o')
+            }
+            
+            $keyInfoPath = Join-Path $script:AuditOutputFolder "encryption_key_info.json"
+            $keyInfo | ConvertTo-Json | Out-File $keyInfoPath -Encoding UTF8
+            
+            # Encrypt all CSV and JSON files
+            $filesToEncrypt = Get-ChildItem -Path $script:AuditOutputFolder -Recurse -Include *.csv,*.json -Exclude encryption_key_info.json
+            $encryptedCount = 0
+            
+            foreach ($file in $filesToEncrypt) {
+                try {
+                    $inputBytes = [System.IO.File]::ReadAllBytes($file.FullName)
+                    
+                    $encryptor = $aes.CreateEncryptor()
+                    $encryptedBytes = $encryptor.TransformFinalBlock($inputBytes, 0, $inputBytes.Length)
+                    
+                    $encryptedFilePath = "$($file.FullName).enc"
+                    [System.IO.File]::WriteAllBytes($encryptedFilePath, $encryptedBytes)
+                    
+                    # Remove original file
+                    Remove-Item $file.FullName -Force
+                    $encryptedCount++
+                }
+                catch {
+                    Write-AuditLog "Failed to encrypt file $($file.Name): $($_.Exception.Message)" -Level Warning
+                }
+            }
+            
+            $aes.Dispose()
+            
+            Write-AuditLog "Azure Key Vault encryption completed: $encryptedCount files encrypted" -Level Success
+            Write-AuditLog "Decryption key stored in Azure Key Vault: $KeyVaultName/$KeyName" -Level Info
+            Write-AuditLog "Key metadata saved to: encryption_key_info.json" -Level Info
+        }
+        catch {
+            Write-AuditLog "Azure Key Vault encryption failed: $($_.Exception.Message)" -Level Error
+            Write-AuditLog "Ensure Az.KeyVault module is installed and you have permissions" -Level Warning
+        }
     }
 }
 
