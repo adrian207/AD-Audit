@@ -139,40 +139,7 @@ function Get-PowerApps {
 
         Write-ModuleLog "Processing $($apps.Count) Power Apps..." -Level Info
 
-        $appDetails = $apps | ForEach-Object {
-            [PSCustomObject]@{
-                DisplayName = $_.DisplayName
-                AppName = $_.AppName
-                EnvironmentName = $_.EnvironmentName
-                Owner = $_.Owner.displayName
-                OwnerEmail = $_.Owner.email
-                CreatedTime = $_.CreatedTime
-                LastModifiedTime = $_.LastModifiedTime
-                AppType = $_.AppType
-                Internal = @{
-                    properties = @{
-                        appVersion = $_.Internal.properties.appVersion
-                        lifeCycleId = $_.Internal.properties.lifeCycleId
-                        createdByClientVersion = $_.Internal.properties.createdByClientVersion
-                        minClientVersion = $_.Internal.properties.minClientVersion
-                        isFeaturedApp = $_.Internal.properties.isFeaturedApp
-                        bypassConsent = $_.Internal.properties.bypassConsent
-                        isHeroApp = $_.Internal.properties.isHeroApp
-                        environment = @{
-                            name = $_.Internal.properties.environment.name
-                        }
-                        embeddedApp = $_.Internal.properties.embeddedApp
-                        appUris = @{
-                            documentUri = @{
-                                value = $_.Internal.properties.appUris.documentUri.value
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        # Simplified export
+        # Export simplified app inventory
         $simplifiedApps = $apps | ForEach-Object {
             [PSCustomObject]@{
                 DisplayName = $_.DisplayName

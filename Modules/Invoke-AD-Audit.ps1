@@ -866,7 +866,6 @@ function Get-ServerStorageInventory {
     $Servers | ForEach-Object -ThrottleLimit $MaxParallel -Parallel {
         $server = $_
         $serverName = $server.ServerName
-        $resultBag = $using:storageResults
         
         try {
             $sessionOption = New-CimSessionOption -Protocol Dcom
@@ -1041,8 +1040,8 @@ function Get-ServerEventLogs {
                              @{N='LastOccurrence';E={($_.Group | Sort-Object TimeCreated -Descending | Select-Object -First 1).TimeCreated}},
                              @{N='Message';E={($_.Group[0].Message -replace '[\r\n]+', ' ').Substring(0, [Math]::Min(500, ($_.Group[0].Message -replace '[\r\n]+', ' ').Length))}}
             
-            foreach ($event in $criticals) {
-                $criticalBag.Add($event)
+            foreach ($logEvent in $criticals) {
+                $criticalBag.Add($logEvent)
             }
             
             # Query Error events
@@ -1063,8 +1062,8 @@ function Get-ServerEventLogs {
                              @{N='LastOccurrence';E={($_.Group | Sort-Object TimeCreated -Descending | Select-Object -First 1).TimeCreated}},
                              @{N='Message';E={($_.Group[0].Message -replace '[\r\n]+', ' ').Substring(0, [Math]::Min(500, ($_.Group[0].Message -replace '[\r\n]+', ' ').Length))}}
             
-            foreach ($event in $errors) {
-                $errorBag.Add($event)
+            foreach ($logEvent in $errors) {
+                $errorBag.Add($logEvent)
             }
             
             Write-Verbose "Collected event logs from $serverName"
@@ -1653,9 +1652,11 @@ try {
         else {
             # Step 2: Storage inventory
             $storage = Get-ServerStorageInventory -Servers $onlineServers -MaxParallel $MaxParallelServers
+            Write-ModuleLog "Collected storage inventory: $($storage.Count) volumes" -Level Success
             
             # Step 3: Installed applications
             $applications = Get-ServerApplications -Servers $onlineServers -MaxParallel $MaxParallelServers
+            Write-ModuleLog "Collected application inventory: $($applications.Count) app instances" -Level Success
             
             # Step 4: Event logs (if not skipped)
             if (-not $SkipEventLogs) {

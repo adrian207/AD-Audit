@@ -412,7 +412,6 @@ try {
         Import-Module Microsoft.Graph.Authentication -ErrorAction SilentlyContinue
         $context = Get-MgContext -ErrorAction SilentlyContinue
         if ($context) {
-            $tenantDomain = $context.TenantId
             # Try to get initial domain from organization
             try {
                 $org = Get-MgOrganization -ErrorAction SilentlyContinue

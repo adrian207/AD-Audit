@@ -922,7 +922,6 @@ function New-SQLDetailedReport {
     $instances = Import-CSVSafe (Join-Path $sqlPath "SQL_Instance_Details.csv")
     $databases = Import-CSVSafe (Join-Path $sqlPath "SQL_Databases.csv")
     $backupIssues = Import-CSVSafe (Join-Path $sqlPath "SQL_Backup_Issues.csv")
-    $logins = Import-CSVSafe (Join-Path $sqlPath "SQL_Logins.csv")
     $sysadmins = Import-CSVSafe (Join-Path $sqlPath "SQL_Logins_SysAdmin.csv")
     $jobs = Import-CSVSafe (Join-Path $sqlPath "SQL_Agent_Jobs.csv")
     $linkedServers = Import-CSVSafe (Join-Path $sqlPath "SQL_Linked_Servers.csv")
