@@ -43,6 +43,22 @@ That's it! The audit runs automatically and saves all results to your chosen fol
 
 ---
 
+## 📚 Complete Documentation
+
+**All documentation is organized in the `docs/` directory:**
+
+| Document | Purpose | Audience |
+|----------|---------|----------|
+| **[Quick Start Guide](docs/QUICK_START.md)** | Get running in 5 minutes | All Users |
+| **[Installation Guide](docs/INSTALLATION.md)** | Setup and prerequisites | IT Administrators |
+| **[User Guide](docs/USER_GUIDE.md)** | Complete usage instructions | Consultants, Auditors |
+| **[Troubleshooting Guide](docs/TROUBLESHOOTING.md)** | Common issues and solutions | Support Teams |
+| **[Module Reference](docs/MODULE_REFERENCE.md)** | Technical API documentation | Developers |
+| **[Design Document](docs/DESIGN_DOCUMENT.md)** | Architecture and design | Architects |
+| **[Development Progress](docs/DEVELOPMENT_PROGRESS.md)** | Build history and features | Stakeholders |
+
+---
+
 ## System Requirements
 
 - **Windows 10/11** or **Windows Server 2016+**
