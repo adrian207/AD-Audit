@@ -406,6 +406,293 @@ function Get-PrivilegedAccounts {
 
 #endregion
 
+#region GPO Inventory
+
+function Get-GPOInventory {
+    [CmdletBinding()]
+    param()
+    
+    Write-ModuleLog "Collecting Group Policy Objects..." -Level Info
+    
+    try {
+        # Get all GPOs
+        $gpos = Get-GPO -All -ErrorAction Stop
+        
+        $gpoResults = foreach ($gpo in $gpos) {
+            # Get GPO links
+            $links = @()
+            try {
+                $gpoReport = [xml](Get-GPOReport -Guid $gpo.Id -ReportType Xml -ErrorAction Stop)
+                $links = $gpoReport.GPO.LinksTo | ForEach-Object {
+                    [PSCustomObject]@{
+                        SOMPath = $_.SOMPath
+                        Enabled = $_.Enabled
+                        NoOverride = $_.NoOverride
+                    }
+                }
+            }
+            catch {
+                Write-Verbose "Failed to get links for GPO $($gpo.DisplayName)"
+            }
+            
+            [PSCustomObject]@{
+                DisplayName = $gpo.DisplayName
+                Id = $gpo.Id
+                GpoStatus = $gpo.GpoStatus
+                CreationTime = $gpo.CreationTime
+                ModificationTime = $gpo.ModificationTime
+                Owner = $gpo.Owner
+                WmiFilterDescription = $gpo.WmiFilter.Description
+                UserVersionDS = $gpo.User.DSVersion
+                UserVersionSysvol = $gpo.User.SysvolVersion
+                ComputerVersionDS = $gpo.Computer.DSVersion
+                ComputerVersionSysvol = $gpo.Computer.SysvolVersion
+                LinksCount = $links.Count
+                Links = ($links.SOMPath -join '; ')
+                LinksEnabled = (($links | Where-Object {$_.Enabled -eq 'true'}).SOMPath -join '; ')
+            }
+        }
+        
+        $gpoResults | Export-Csv -Path (Join-Path $script:ADOutputPath "AD_GPOs.csv") -NoTypeInformation
+        
+        # Export unlinked GPOs
+        $unlinked = $gpoResults | Where-Object {$_.LinksCount -eq 0}
+        if ($unlinked) {
+            $unlinked | Export-Csv -Path (Join-Path $script:ADOutputPath "AD_GPOs_Unlinked.csv") -NoTypeInformation
+        }
+        
+        Write-ModuleLog "Collected $($gpoResults.Count) GPOs ($($unlinked.Count) unlinked)" -Level Success
+        return $gpoResults
+    }
+    catch {
+        Write-ModuleLog "Failed to collect GPOs: $_" -Level Error
+        return $null
+    }
+}
+
+#endregion
+
+#region AD Trusts
+
+function Get-ADTrustInventory {
+    [CmdletBinding()]
+    param()
+    
+    Write-ModuleLog "Collecting Active Directory trusts..." -Level Info
+    
+    try {
+        $domain = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain()
+        $trusts = $domain.GetAllTrustRelationships()
+        
+        $trustResults = foreach ($trust in $trusts) {
+            [PSCustomObject]@{
+                SourceName = $trust.SourceName
+                TargetName = $trust.TargetName
+                TrustType = $trust.TrustType
+                TrustDirection = $trust.TrustDirection
+            }
+        }
+        
+        if ($trustResults) {
+            $trustResults | Export-Csv -Path (Join-Path $script:ADOutputPath "AD_Trusts.csv") -NoTypeInformation
+            Write-ModuleLog "Collected $($trustResults.Count) AD trusts" -Level Success
+        }
+        else {
+            Write-ModuleLog "No AD trusts found" -Level Info
+        }
+        
+        return $trustResults
+    }
+    catch {
+        Write-ModuleLog "Failed to collect AD trusts: $_" -Level Warning
+        return $null
+    }
+}
+
+#endregion
+
+#region Service Accounts
+
+function Get-ServiceAccounts {
+    [CmdletBinding()]
+    param()
+    
+    Write-ModuleLog "Detecting service accounts (heuristic analysis)..." -Level Info
+    
+    try {
+        # Get all enabled user accounts
+        $users = Get-ADUser -Filter {Enabled -eq $true} -Properties ServicePrincipalName, PasswordLastSet, LastLogonDate, Description, MemberOf -ErrorAction Stop
+        
+        $serviceAccounts = $users | Where-Object {
+            # Heuristics for service account detection:
+            # 1. Has SPNs
+            # 2. Password never expires
+            # 3. Name contains svc, service, app, sql, iis, web
+            # 4. Description mentions service, application, automated
+            $hasSPN = $_.ServicePrincipalName.Count -gt 0
+            $namePattern = $_.SamAccountName -match '(svc|service|app|sql|iis|web|admin|system|auto|batch)'
+            $descPattern = $_.Description -match '(service|application|automated|system|SQL|IIS|batch|scheduled)'
+            
+            $hasSPN -or $namePattern -or $descPattern
+        } | ForEach-Object {
+            [PSCustomObject]@{
+                SamAccountName = $_.SamAccountName
+                DisplayName = $_.DisplayName
+                Description = $_.Description
+                Enabled = $_.Enabled
+                PasswordLastSet = $_.PasswordLastSet
+                LastLogonDate = $_.LastLogonDate
+                SPNCount = $_.ServicePrincipalName.Count
+                SPNs = ($_.ServicePrincipalName -join '; ')
+                MemberOf = (($_.MemberOf | ForEach-Object {($_ -split ',')[0] -replace 'CN='}) -join '; ')
+                DetectionReason = @(
+                    if ($_.ServicePrincipalName.Count -gt 0) { "HasSPN" }
+                    if ($_.SamAccountName -match '(svc|service|app|sql|iis|web)') { "NamePattern" }
+                    if ($_.Description -match '(service|application|automated)') { "DescPattern" }
+                ) -join ', '
+            }
+        }
+        
+        if ($serviceAccounts) {
+            $serviceAccounts | Export-Csv -Path (Join-Path $script:ADOutputPath "AD_ServiceAccounts.csv") -NoTypeInformation
+            Write-ModuleLog "Detected $($serviceAccounts.Count) potential service accounts" -Level Success
+        }
+        else {
+            Write-ModuleLog "No service accounts detected" -Level Info
+        }
+        
+        return $serviceAccounts
+    }
+    catch {
+        Write-ModuleLog "Failed to detect service accounts: $_" -Level Error
+        return $null
+    }
+}
+
+#endregion
+
+#region Password Policies
+
+function Get-PasswordPolicyInventory {
+    [CmdletBinding()]
+    param()
+    
+    Write-ModuleLog "Collecting password policies..." -Level Info
+    
+    try {
+        # Default domain policy
+        $defaultPolicy = Get-ADDefaultDomainPasswordPolicy -ErrorAction Stop
+        
+        $policyResults = @()
+        $policyResults += [PSCustomObject]@{
+            Name = "Default Domain Policy"
+            ComplexityEnabled = $defaultPolicy.ComplexityEnabled
+            MinPasswordLength = $defaultPolicy.MinPasswordLength
+            MinPasswordAge = $defaultPolicy.MinPasswordAge.Days
+            MaxPasswordAge = $defaultPolicy.MaxPasswordAge.Days
+            PasswordHistoryCount = $defaultPolicy.PasswordHistoryCount
+            LockoutDuration = $defaultPolicy.LockoutDuration.Minutes
+            LockoutObservationWindow = $defaultPolicy.LockoutObservationWindow.Minutes
+            LockoutThreshold = $defaultPolicy.LockoutThreshold
+            ReversibleEncryptionEnabled = $defaultPolicy.ReversibleEncryptionEnabled
+            AppliesTo = "All users (default)"
+        }
+        
+        # Fine-Grained Password Policies (FGPP)
+        try {
+            $fgpps = Get-ADFineGrainedPasswordPolicy -Filter * -ErrorAction Stop
+            foreach ($fgpp in $fgpps) {
+                $appliesTo = (Get-ADFineGrainedPasswordPolicySubject -Identity $fgpp | Select-Object -ExpandProperty Name) -join '; '
+                
+                $policyResults += [PSCustomObject]@{
+                    Name = $fgpp.Name
+                    ComplexityEnabled = $fgpp.ComplexityEnabled
+                    MinPasswordLength = $fgpp.MinPasswordLength
+                    MinPasswordAge = $fgpp.MinPasswordAge.Days
+                    MaxPasswordAge = $fgpp.MaxPasswordAge.Days
+                    PasswordHistoryCount = $fgpp.PasswordHistoryCount
+                    LockoutDuration = $fgpp.LockoutDuration.Minutes
+                    LockoutObservationWindow = $fgpp.LockoutObservationWindow.Minutes
+                    LockoutThreshold = $fgpp.LockoutThreshold
+                    ReversibleEncryptionEnabled = $fgpp.ReversibleEncryptionEnabled
+                    AppliesTo = $appliesTo
+                    Precedence = $fgpp.Precedence
+                }
+            }
+        }
+        catch {
+            Write-ModuleLog "No Fine-Grained Password Policies found" -Level Info
+        }
+        
+        $policyResults | Export-Csv -Path (Join-Path $script:ADOutputPath "AD_PasswordPolicies.csv") -NoTypeInformation
+        Write-ModuleLog "Collected $($policyResults.Count) password policies" -Level Success
+        
+        return $policyResults
+    }
+    catch {
+        Write-ModuleLog "Failed to collect password policies: $_" -Level Error
+        return $null
+    }
+}
+
+#endregion
+
+#region DNS Zones
+
+function Get-DNSZoneInventory {
+    [CmdletBinding()]
+    param()
+    
+    Write-ModuleLog "Collecting DNS zones..." -Level Info
+    
+    try {
+        # Get domain controllers (DNS servers)
+        $dcs = Get-ADDomainController -Filter * -ErrorAction Stop
+        $primaryDC = $dcs | Select-Object -First 1
+        
+        Write-ModuleLog "Querying DNS zones from $($primaryDC.HostName)..." -Level Info
+        
+        # Query DNS zones via CIM
+        $zones = Get-CimInstance -ComputerName $primaryDC.HostName -Namespace "root\MicrosoftDNS" -ClassName "MicrosoftDNS_Zone" -ErrorAction Stop
+        
+        $zoneResults = $zones | ForEach-Object {
+            [PSCustomObject]@{
+                ZoneName = $_.Name
+                ZoneType = switch ($_.ZoneType) {
+                    0 { "Cache" }
+                    1 { "Primary" }
+                    2 { "Secondary" }
+                    3 { "Stub" }
+                    4 { "Forwarder" }
+                    default { "Unknown" }
+                }
+                DynamicUpdate = switch ($_.AllowUpdate) {
+                    0 { "None" }
+                    1 { "Nonsecure and secure" }
+                    2 { "Secure only" }
+                    default { "Unknown" }
+                }
+                IsReverseLookupZone = $_.IsReverseLookupZone
+                IsDsIntegrated = $_.DsIntegrated
+                IsAutoCreated = $_.IsAutoCreated
+                IsPaused = $_.Paused
+                IsShutdown = $_.Shutdown
+            }
+        }
+        
+        $zoneResults | Export-Csv -Path (Join-Path $script:ADOutputPath "AD_DNS_Zones.csv") -NoTypeInformation
+        Write-ModuleLog "Collected $($zoneResults.Count) DNS zones" -Level Success
+        
+        return $zoneResults
+    }
+    catch {
+        Write-ModuleLog "Failed to collect DNS zones: $_" -Level Warning
+        return $null
+    }
+}
+
+#endregion
+
 #region Server Hardware Inventory
 
 function Get-ServerHardwareInventory {
@@ -1326,15 +1613,25 @@ try {
     # Collect privileged accounts
     $privilegedAccounts = Get-PrivilegedAccounts
     
-    # TODO: Implement remaining AD audit components:
-    # - GPO inventory
-    # - Service accounts
-    # - Trusts
-    # - ACL analysis
-    # - Password policies
-    # - Kerberos delegation
-    # - DNS zones
-    # - DHCP scopes
+    # Collect GPO inventory
+    $gpos = Get-GPOInventory
+    if ($gpos) { $script:Stats.TotalGPOs = $gpos.Count }
+    
+    # Collect AD trusts
+    $trusts = Get-ADTrustInventory
+    if ($trusts) { $script:Stats.TotalTrusts = $trusts.Count }
+    
+    # Detect service accounts
+    $serviceAccounts = Get-ServiceAccounts
+    if ($serviceAccounts) { $script:Stats.ServiceAccounts = $serviceAccounts.Count }
+    
+    # Collect password policies
+    $passwordPolicies = Get-PasswordPolicyInventory
+    if ($passwordPolicies) { $script:Stats.PasswordPolicies = $passwordPolicies.Count }
+    
+    # Collect DNS zones
+    $dnsZones = Get-DNSZoneInventory
+    if ($dnsZones) { $script:Stats.DNSZones = $dnsZones.Count }
     
     # Server Inventory (if enabled)
     if ($ServerInventory -and $memberServers) {
