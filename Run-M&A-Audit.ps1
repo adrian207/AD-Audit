@@ -884,8 +884,16 @@ try {
         }
         Invoke-AuditModule -ModuleName "SharePoint, OneDrive & Teams" -ModulePath (Join-Path $modulesPath "Invoke-SharePoint-Teams-Audit.ps1") -Parameters $sharePointParams
 
+        # Power Platform Module (skip if requested)
+        if (-not $SkipPowerPlatform) {
+            $powerPlatformParams = @{
+                OutputFolder = Join-Path $script:AuditOutputFolder "RawData"
+            }
+            Invoke-AuditModule -ModuleName "Power Platform" -ModulePath (Join-Path $modulesPath "Invoke-PowerPlatform-Audit.ps1") -Parameters $powerPlatformParams
+        }
+
         # Placeholder for remaining cloud modules (to be implemented)
-        Write-AuditLog "Power Platform, Compliance modules pending implementation" -Level Warning
+        Write-AuditLog "Compliance module pending implementation" -Level Warning
     }
     
     # Export metadata
