@@ -89,7 +89,7 @@ $outputTextBox.Text = "C:\Audits"
 $form.Controls.Add($outputTextBox)
 
 $browseButton = New-Object System.Windows.Forms.Button
-$browseButton.Location = New-Object System.Drawing.Point(645, $yPos - 2)
+$browseButton.Location = New-Object System.Drawing.Point(645, ([int]$yPos - 2))
 $browseButton.Size = New-Object System.Drawing.Size(75, 28)
 $browseButton.Text = 'Browse...'
 $browseButton.Font = New-Object System.Drawing.Font("Segoe UI", 9)
@@ -138,7 +138,7 @@ $domainTextBox.Text = $env:USERDNSDOMAIN
 $form.Controls.Add($domainTextBox)
 
 $domainHelpLabel = New-Object System.Windows.Forms.Label
-$domainHelpLabel.Location = New-Object System.Drawing.Point(525, $yPos + 2)
+$domainHelpLabel.Location = New-Object System.Drawing.Point(525, ([int]$yPos + 2))
 $domainHelpLabel.Size = New-Object System.Drawing.Size(195, 20)
 $domainHelpLabel.Text = '(leave blank for current domain)'
 $domainHelpLabel.Font = New-Object System.Drawing.Font("Segoe UI", 8, [System.Drawing.FontStyle]::Italic)
@@ -205,7 +205,7 @@ $auditGroupBox.Controls.Add($m365CheckBox)
 
 # Coming soon label
 $comingSoonLabel = New-Object System.Windows.Forms.Label
-$comingSoonLabel.Location = New-Object System.Drawing.Point(40, $cbYPos + 25)
+$comingSoonLabel.Location = New-Object System.Drawing.Point(40, ([int]$cbYPos + 25))
 $comingSoonLabel.Size = New-Object System.Drawing.Size(200, 20)
 $comingSoonLabel.Text = '(Coming soon)'
 $comingSoonLabel.Font = New-Object System.Drawing.Font("Segoe UI", 8, [System.Drawing.FontStyle]::Italic)
@@ -236,7 +236,7 @@ $eventLogLabel.Font = New-Object System.Drawing.Font("Segoe UI", 9)
 $optionsGroupBox.Controls.Add($eventLogLabel)
 
 $eventLogComboBox = New-Object System.Windows.Forms.ComboBox
-$eventLogComboBox.Location = New-Object System.Drawing.Point(240, $optYPos - 2)
+$eventLogComboBox.Location = New-Object System.Drawing.Point(240, ([int]$optYPos - 2))
 $eventLogComboBox.Size = New-Object System.Drawing.Size(100, 25)
 $eventLogComboBox.DropDownStyle = 'DropDownList'
 $eventLogComboBox.Font = New-Object System.Drawing.Font("Segoe UI", 9)
@@ -253,7 +253,7 @@ $logonHistoryLabel.Font = New-Object System.Drawing.Font("Segoe UI", 9)
 $optionsGroupBox.Controls.Add($logonHistoryLabel)
 
 $logonHistoryComboBox = New-Object System.Windows.Forms.ComboBox
-$logonHistoryComboBox.Location = New-Object System.Drawing.Point(540, $optYPos - 2)
+$logonHistoryComboBox.Location = New-Object System.Drawing.Point(540, ([int]$optYPos - 2))
 $logonHistoryComboBox.Size = New-Object System.Drawing.Size(100, 25)
 $logonHistoryComboBox.DropDownStyle = 'DropDownList'
 $logonHistoryComboBox.Font = New-Object System.Drawing.Font("Segoe UI", 9)
@@ -272,7 +272,7 @@ $staleLabel.Font = New-Object System.Drawing.Font("Segoe UI", 9)
 $optionsGroupBox.Controls.Add($staleLabel)
 
 $staleComboBox = New-Object System.Windows.Forms.ComboBox
-$staleComboBox.Location = New-Object System.Drawing.Point(240, $optYPos - 2)
+$staleComboBox.Location = New-Object System.Drawing.Point(240, ([int]$optYPos - 2))
 $staleComboBox.Size = New-Object System.Drawing.Size(100, 25)
 $staleComboBox.DropDownStyle = 'DropDownList'
 $staleComboBox.Font = New-Object System.Drawing.Font("Segoe UI", 9)
@@ -289,7 +289,7 @@ $parallelLabel.Font = New-Object System.Drawing.Font("Segoe UI", 9)
 $optionsGroupBox.Controls.Add($parallelLabel)
 
 $parallelNumeric = New-Object System.Windows.Forms.NumericUpDown
-$parallelNumeric.Location = New-Object System.Drawing.Point(540, $optYPos - 2)
+$parallelNumeric.Location = New-Object System.Drawing.Point(540, ([int]$optYPos - 2))
 $parallelNumeric.Size = New-Object System.Drawing.Size(80, 25)
 $parallelNumeric.Minimum = 1
 $parallelNumeric.Maximum = 50
@@ -455,7 +455,7 @@ $emailLabel.Font = New-Object System.Drawing.Font("Segoe UI", 9)
 $complianceGroupBox.Controls.Add($emailLabel)
 
 $emailTextBox = New-Object System.Windows.Forms.TextBox
-$emailTextBox.Location = New-Object System.Drawing.Point(180, $compYPos - 2)
+$emailTextBox.Location = New-Object System.Drawing.Point(180, ([int]$compYPos - 2))
 $emailTextBox.Size = New-Object System.Drawing.Size(500, 25)
 $emailTextBox.Font = New-Object System.Drawing.Font("Segoe UI", 9)
 $emailTextBox.Text = ""  # Optional: your.email@company.com
