@@ -704,6 +704,242 @@ function Get-ServerApplications {
 
 #endregion
 
+#region Event Log Analysis
+
+function Get-ServerEventLogs {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [array]$Servers,
+        
+        [int]$Days = 30,
+        
+        [int]$MaxParallel = 10
+    )
+    
+    Write-ModuleLog "Collecting event logs from $($Servers.Count) servers (last $Days days)..." -Level Info
+    Write-ModuleLog "This may take 15-30 minutes for large Security logs..." -Level Warning
+    
+    $criticalEvents = [System.Collections.Concurrent.ConcurrentBag[object]]::new()
+    $errorEvents = [System.Collections.Concurrent.ConcurrentBag[object]]::new()
+    
+    $startDate = (Get-Date).AddDays(-$Days)
+    
+    $Servers | ForEach-Object -ThrottleLimit $MaxParallel -Parallel {
+        $server = $_
+        $serverName = $server.ServerName
+        $criticalBag = $using:criticalEvents
+        $errorBag = $using:errorEvents
+        $days = $using:Days
+        $startDate = $using:startDate
+        
+        try {
+            # Query Critical events
+            $criticalFilter = @{
+                LogName = 'System', 'Application'
+                Level = 1  # Critical
+                StartTime = $startDate
+            }
+            
+            $criticals = Get-WinEvent -ComputerName $serverName -FilterHashtable $criticalFilter -ErrorAction SilentlyContinue |
+                Group-Object Id, ProviderName |
+                Select-Object @{N='ServerName';E={$serverName}},
+                             @{N='EventID';E={$_.Group[0].Id}},
+                             @{N='Source';E={$_.Group[0].ProviderName}},
+                             @{N='LogName';E={$_.Group[0].LogName}},
+                             @{N='Count';E={$_.Count}},
+                             @{N='FirstOccurrence';E={($_.Group | Sort-Object TimeCreated | Select-Object -First 1).TimeCreated}},
+                             @{N='LastOccurrence';E={($_.Group | Sort-Object TimeCreated -Descending | Select-Object -First 1).TimeCreated}},
+                             @{N='Message';E={($_.Group[0].Message -replace '[\r\n]+', ' ').Substring(0, [Math]::Min(500, ($_.Group[0].Message -replace '[\r\n]+', ' ').Length))}}
+            
+            foreach ($event in $criticals) {
+                $criticalBag.Add($event)
+            }
+            
+            # Query Error events
+            $errorFilter = @{
+                LogName = 'System', 'Application'
+                Level = 2  # Error
+                StartTime = $startDate
+            }
+            
+            $errors = Get-WinEvent -ComputerName $serverName -FilterHashtable $errorFilter -MaxEvents 1000 -ErrorAction SilentlyContinue |
+                Group-Object Id, ProviderName |
+                Select-Object @{N='ServerName';E={$serverName}},
+                             @{N='EventID';E={$_.Group[0].Id}},
+                             @{N='Source';E={$_.Group[0].ProviderName}},
+                             @{N='LogName';E={$_.Group[0].LogName}},
+                             @{N='Count';E={$_.Count}},
+                             @{N='FirstOccurrence';E={($_.Group | Sort-Object TimeCreated | Select-Object -First 1).TimeCreated}},
+                             @{N='LastOccurrence';E={($_.Group | Sort-Object TimeCreated -Descending | Select-Object -First 1).TimeCreated}},
+                             @{N='Message';E={($_.Group[0].Message -replace '[\r\n]+', ' ').Substring(0, [Math]::Min(500, ($_.Group[0].Message -replace '[\r\n]+', ' ').Length))}}
+            
+            foreach ($event in $errors) {
+                $errorBag.Add($event)
+            }
+            
+            Write-Verbose "Collected event logs from $serverName"
+        }
+        catch {
+            Write-Verbose "Failed to collect event logs from $serverName: $_"
+        }
+    }
+    
+    # Export results
+    $criticalResults = @($criticalEvents) | Sort-Object Count -Descending
+    if ($criticalResults.Count -gt 0) {
+        $criticalResults | Export-Csv -Path (Join-Path $using:script:ServerOutputPath "Server_Event_Log_Critical.csv") -NoTypeInformation
+        Write-Verbose "Collected $($criticalResults.Count) unique critical event types"
+    }
+    
+    $errorResults = @($errorEvents) | Sort-Object Count -Descending
+    if ($errorResults.Count -gt 0) {
+        $errorResults | Export-Csv -Path (Join-Path $using:script:ServerOutputPath "Server_Event_Log_Errors.csv") -NoTypeInformation
+        Write-Verbose "Collected $($errorResults.Count) unique error event types"
+    }
+    
+    return @{
+        Critical = $criticalResults
+        Errors = $errorResults
+    }
+}
+
+#endregion
+
+#region Logon History Analysis
+
+function Get-ServerLogonHistory {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [array]$Servers,
+        
+        [int]$Days = 90,
+        
+        [int]$MaxParallel = 10
+    )
+    
+    Write-ModuleLog "Collecting logon history from $($Servers.Count) servers (last $Days days)..." -Level Info
+    Write-ModuleLog "This may take 20-40 minutes for large Security logs..." -Level Warning
+    
+    $logonResults = [System.Collections.Concurrent.ConcurrentBag[object]]::new()
+    $failureResults = [System.Collections.Concurrent.ConcurrentBag[object]]::new()
+    
+    $startDate = (Get-Date).AddDays(-$Days)
+    
+    $Servers | ForEach-Object -ThrottleLimit $MaxParallel -Parallel {
+        $server = $_
+        $serverName = $server.ServerName
+        $logonBag = $using:logonResults
+        $failureBag = $using:failureResults
+        $startDate = $using:startDate
+        
+        try {
+            # Query successful logons (Event ID 4624)
+            $logonFilter = @{
+                LogName = 'Security'
+                ID = 4624
+                StartTime = $startDate
+            }
+            
+            $logons = Get-WinEvent -ComputerName $serverName -FilterHashtable $logonFilter -MaxEvents 10000 -ErrorAction SilentlyContinue
+            
+            if ($logons) {
+                $logonSummary = $logons | ForEach-Object {
+                    $xml = [xml]$_.ToXml()
+                    $targetUser = ($xml.Event.EventData.Data | Where-Object {$_.Name -eq 'TargetUserName'}).'#text'
+                    $logonType = ($xml.Event.EventData.Data | Where-Object {$_.Name -eq 'LogonType'}).'#text'
+                    $sourceIP = ($xml.Event.EventData.Data | Where-Object {$_.Name -eq 'IpAddress'}).'#text'
+                    
+                    if ($targetUser -and $targetUser -notmatch '\$$') {  # Exclude computer accounts
+                        [PSCustomObject]@{
+                            ServerName = $serverName
+                            UserName = $targetUser
+                            LogonType = $logonType
+                            SourceIP = $sourceIP
+                            Timestamp = $_.TimeCreated
+                        }
+                    }
+                } | Where-Object {$_}
+                
+                # Aggregate by user
+                $userSummary = $logonSummary | Group-Object UserName | Select-Object @{N='ServerName';E={$serverName}},
+                    @{N='UserName';E={$_.Name}},
+                    @{N='LogonCount';E={$_.Count}},
+                    @{N='FirstLogon';E={($_.Group | Sort-Object Timestamp | Select-Object -First 1).Timestamp}},
+                    @{N='LastLogon';E={($_.Group | Sort-Object Timestamp -Descending | Select-Object -First 1).Timestamp}},
+                    @{N='LogonTypes';E={($_.Group.LogonType | Select-Object -Unique) -join '; '}},
+                    @{N='UniqueIPs';E={($_.Group.SourceIP | Where-Object {$_ -ne '-'} | Select-Object -Unique).Count}}
+                
+                foreach ($user in $userSummary) {
+                    $logonBag.Add($user)
+                }
+            }
+            
+            # Query failed logons (Event ID 4625)
+            $failureFilter = @{
+                LogName = 'Security'
+                ID = 4625
+                StartTime = $startDate
+            }
+            
+            $failures = Get-WinEvent -ComputerName $serverName -FilterHashtable $failureFilter -MaxEvents 5000 -ErrorAction SilentlyContinue
+            
+            if ($failures) {
+                $failureSummary = $failures | ForEach-Object {
+                    $xml = [xml]$_.ToXml()
+                    $targetUser = ($xml.Event.EventData.Data | Where-Object {$_.Name -eq 'TargetUserName'}).'#text'
+                    $failureReason = ($xml.Event.EventData.Data | Where-Object {$_.Name -eq 'Status'}).'#text'
+                    
+                    if ($targetUser) {
+                        [PSCustomObject]@{
+                            ServerName = $serverName
+                            UserName = $targetUser
+                            FailureReason = $failureReason
+                            Timestamp = $_.TimeCreated
+                        }
+                    }
+                } | Where-Object {$_}
+                
+                $userFailures = $failureSummary | Group-Object UserName | Select-Object @{N='ServerName';E={$serverName}},
+                    @{N='UserName';E={$_.Name}},
+                    @{N='FailureCount';E={$_.Count}},
+                    @{N='FirstFailure';E={($_.Group | Sort-Object Timestamp | Select-Object -First 1).Timestamp}},
+                    @{N='LastFailure';E={($_.Group | Sort-Object Timestamp -Descending | Select-Object -First 1).Timestamp}}
+                
+                foreach ($failure in $userFailures) {
+                    $failureBag.Add($failure)
+                }
+            }
+            
+            Write-Verbose "Collected logon history from $serverName"
+        }
+        catch {
+            Write-Verbose "Failed to collect logon history from $serverName: $_"
+        }
+    }
+    
+    # Export results
+    $logonResults = @($logonResults) | Sort-Object LogonCount -Descending
+    if ($logonResults.Count -gt 0) {
+        $logonResults | Export-Csv -Path (Join-Path $using:script:ServerOutputPath "Server_Logon_History.csv") -NoTypeInformation
+        Write-Verbose "Collected logon history for $($logonResults.Count) users"
+    }
+    
+    $failureResults = @($failureResults) | Sort-Object FailureCount -Descending
+    if ($failureResults.Count -gt 0) {
+        $failureResults | Export-Csv -Path (Join-Path $using:script:ServerOutputPath "Server_Logon_Failures.csv") -NoTypeInformation
+        Write-Verbose "Collected $($failureResults.Count) users with failed logon attempts"
+    }
+    
+    return @{
+        Logons = $logonResults
+        Failures = $failureResults
+    }
+}
+
+#endregion
+
 #region Main Execution
 
 try {
@@ -761,12 +997,14 @@ try {
             
             # Step 4: Event logs (if not skipped)
             if (-not $SkipEventLogs) {
-                Write-ModuleLog "Event log collection will be implemented in next iteration" -Level Warning
+                $eventLogs = Get-ServerEventLogs -Servers $onlineServers -Days $ServerEventLogDays -MaxParallel $MaxParallelServers
+                Write-ModuleLog "Collected $($eventLogs.Critical.Count) critical and $($eventLogs.Errors.Count) error event types" -Level Success
             }
             
             # Step 5: Logon history (if not skipped)  
             if (-not $SkipLogonHistory) {
-                Write-ModuleLog "Logon history collection will be implemented in next iteration" -Level Warning
+                $logonHistory = Get-ServerLogonHistory -Servers $onlineServers -Days $ServerLogonHistoryDays -MaxParallel $MaxParallelServers
+                Write-ModuleLog "Collected logon history for $($logonHistory.Logons.Count) users" -Level Success
             }
             
             # Step 6: SQL Server inventory (if not skipped)
