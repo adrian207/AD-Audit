@@ -108,6 +108,28 @@ That's it! The audit runs automatically and saves all results to your chosen fol
 
 ---
 
+## 🌐 Web-Based Query Builder (NEW!)
+
+**Point-and-click database querying for your audit results**
+
+### Quick Start
+```powershell
+Install-Module Pode -Scope CurrentUser
+.\Start-M&A-QueryBuilder-Web.ps1
+```
+Then open: **http://localhost:5000**
+
+### Features
+- 📊 Visual query builder (no SQL needed)
+- 🎯 8 pre-built templates
+- 🌐 Multi-user access
+- 📱 Mobile-friendly
+- 💾 CSV export
+
+**Full Guide**: See `QUERY_BUILDER_README.md`
+
+---
+
 ## For Advanced Users
 
 **Command-line version** (more options):
