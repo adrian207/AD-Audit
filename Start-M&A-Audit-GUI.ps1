@@ -475,7 +475,19 @@ $encryptionCheckBox.Checked = $true
 $encryptionCheckBox.Font = New-Object System.Drawing.Font("Segoe UI", 10)
 $form.Controls.Add($encryptionCheckBox)
 
-$yPos += 40
+$yPos += 35
+
+# SQLite Database checkbox
+$databaseCheckBox = New-Object System.Windows.Forms.CheckBox
+$databaseCheckBox.Location = New-Object System.Drawing.Point(20, $yPos)
+$databaseCheckBox.Size = New-Object System.Drawing.Size(680, 25)
+$databaseCheckBox.Text = 'Create SQLite database (enables advanced cross-dataset queries and reporting)'
+$databaseCheckBox.Checked = $true
+$databaseCheckBox.Font = New-Object System.Drawing.Font("Segoe UI", 10)
+$databaseCheckBox.ForeColor = [System.Drawing.Color]::FromArgb(0, 120, 215)
+$form.Controls.Add($databaseCheckBox)
+
+$yPos += 45
 
 #endregion
 
@@ -572,6 +584,10 @@ $startButton.Add_Click({
     
     if (-not $encryptionCheckBox.Checked) {
         $script:AuditParams['SkipEncryption'] = $true
+    }
+    
+    if ($databaseCheckBox.Checked) {
+        $script:AuditParams['CreateDatabase'] = $true
     }
     
     # Confirm before starting

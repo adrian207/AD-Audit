@@ -350,6 +350,7 @@ C:\Audits\Contoso-2025-10-20-143022\
 │   └── Security_Detailed_Report.html (🔐 Security findings)
 ├── Logs\
 │   └── audit_20251020_143022.log   (Execution log)
+├── AuditData.db                     (🗄️ SQLite database - optional)
 └── audit_metadata.json              (Audit metadata)
 ```
 
@@ -705,7 +706,68 @@ $cmdbData | Export-Csv "C:\Audits\CMDB_Import.csv" -NoTypeInformation
 Invoke-RestMethod -Uri "https://cmdb.company.com/api/servers" -Method Post -Body ($cmdbData | ConvertTo-Json)
 ```
 
-### Scenario 5: Compliance Evidence
+### Scenario 5: Cross-Dataset Queries with SQLite
+
+**Challenge**: Correlate data across multiple audit domains (e.g., "Which servers have SQL databases without backups?")
+
+**Solution**: Enable SQLite database creation for advanced queries
+
+```powershell
+# Run audit with database creation
+.\Run-M&A-Audit.ps1 `
+    -CompanyName "Contoso" `
+    -OutputFolder "C:\Audits\Contoso" `
+    -CreateDatabase
+
+# After audit completes, query the database
+$dbPath = "C:\Audits\Contoso-<timestamp>\AuditData.db"
+Add-Type -Path ".\Libraries\System.Data.SQLite.dll"
+$connection = New-Object System.Data.SQLite.SQLiteConnection("Data Source=$dbPath;Version=3;")
+$connection.Open()
+
+# Example: Find servers with SQL databases that have no backups
+$query = @"
+SELECT 
+    s.ServerName,
+    s.OperatingSystem,
+    s.MemoryGB,
+    d.DatabaseName,
+    d.SizeGB,
+    d.DaysSinceLastBackup,
+    d.BackupIssue
+FROM Servers s
+INNER JOIN SQLDatabases d ON s.ServerName = d.ServerName
+WHERE d.BackupIssue IS NOT NULL
+ORDER BY d.SizeGB DESC
+"@
+
+$command = $connection.CreateCommand()
+$command.CommandText = $query
+$reader = $command.ExecuteReader()
+
+$results = @()
+while ($reader.Read()) {
+    $results += [PSCustomObject]@{
+        ServerName = $reader["ServerName"]
+        OS = $reader["OperatingSystem"]
+        RAM_GB = $reader["MemoryGB"]
+        DatabaseName = $reader["DatabaseName"]
+        SizeGB = $reader["SizeGB"]
+        DaysSinceBackup = $reader["DaysSinceLastBackup"]
+        Issue = $reader["BackupIssue"]
+    }
+}
+
+$connection.Close()
+$results | Export-Csv "Backup_Risk_Servers.csv" -NoTypeInformation
+```
+
+**Other useful queries**:
+- Users with admin rights and stale accounts
+- Servers running critical apps with no recent logins
+- SQL databases by server location and backup status
+
+### Scenario 6: Compliance Evidence
 
 **Challenge**: Provide audit evidence for compliance auditors
 

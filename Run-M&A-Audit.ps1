@@ -75,6 +75,9 @@
 .PARAMETER SkipEncryption
     Skip all encryption (NOT RECOMMENDED - for development only)
 
+.PARAMETER CreateDatabase
+    Create SQLite database from CSV audit data (enables cross-dataset queries and reporting)
+
 .EXAMPLE
     .\Run-M&A-Audit.ps1 -CompanyName "Contoso" -OutputFolder "C:\Audits\Contoso" -Verbose
 
@@ -192,7 +195,10 @@ param(
     [string]$KeyName,
 
     [Parameter(Mandatory = $false)]
-    [switch]$SkipEncryption
+    [switch]$SkipEncryption,
+
+    [Parameter(Mandatory = $false)]
+    [switch]$CreateDatabase
 )
 
 #Requires -Version 5.1
@@ -931,6 +937,38 @@ try {
         }
         Write-Host ""
         Write-Host "Check error log for details: $script:ErrorLog" -ForegroundColor Yellow
+    }
+    
+    # Create SQLite database (if requested)
+    if ($CreateDatabase) {
+        Write-Host ""
+        Write-Host "Creating SQLite database..." -ForegroundColor Cyan
+        try {
+            $dbScript = Join-Path $PSScriptRoot "Libraries\SQLite-AuditDB.ps1"
+            if (Test-Path $dbScript) {
+                . $dbScript  # Dot-source to load functions
+                
+                $dbPath = Join-Path $script:AuditOutputFolder "AuditData.db"
+                $dbConnection = Initialize-AuditDatabase -DatabasePath $dbPath
+                
+                if ($dbConnection) {
+                    $importedRows = Import-AuditCSVsToDatabase -Connection $dbConnection -RawDataFolder $script:AuditOutputFolder
+                    $dbConnection.Close()
+                    
+                    Write-Host "SQLite database created: $dbPath" -ForegroundColor Green
+                    Write-Host "Total rows imported: $importedRows" -ForegroundColor Green
+                    Write-AuditLog "SQLite database created with $importedRows rows" -Level Success
+                }
+            }
+            else {
+                Write-AuditLog "SQLite library not found: $dbScript" -Level Warning
+                Write-Host "Warning: SQLite library not found - database not created" -ForegroundColor Yellow
+            }
+        }
+        catch {
+            Write-AuditLog "Failed to create SQLite database: $_" -Level Warning
+            Write-Host "Warning: SQLite database creation failed: $_" -ForegroundColor Yellow
+        }
     }
     
     # Generate HTML reports

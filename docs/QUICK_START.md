@@ -10,6 +10,7 @@ A comprehensive audit of your Microsoft infrastructure in one command:
 - **On-Premises**: Active Directory, servers, SQL databases
 - **Microsoft 365**: Entra ID, Exchange, SharePoint, Teams, Power Platform, Compliance
 - **Reports**: 5 HTML reports with executive dashboard
+- **Database**: SQLite database for cross-dataset queries (optional)
 - **Security**: AES-256 encrypted output
 
 **Time**: 5 minutes setup + 30-90 minutes execution
@@ -143,8 +144,9 @@ Click the navigation menu for:
 
 ### **Short Term (Week 1)**
 1. 📋 Deep-dive into raw CSV data files (`Output\RawData\`)
-2. 🔍 Cross-reference findings with business requirements
-3. 📊 Build migration project plan based on discovered infrastructure
+2. 🗄️ Query SQLite database for cross-dataset analysis (`AuditData.db`)
+3. 🔍 Cross-reference findings with business requirements
+4. 📊 Build migration project plan based on discovered infrastructure
 
 ### **Medium Term (Month 1)**
 1. 🚀 Begin remediation of identified issues
