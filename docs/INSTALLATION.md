@@ -184,7 +184,47 @@ $PSVersionTable
 winget install --id Microsoft.PowerShell --source winget
 ```
 
-### Step 4: Pre-Install Modules (Optional but Recommended)
+### Step 4: Install SQLite Library (Required for Query Builder & Database Features)
+
+The M&A Audit Tool includes a web-based query builder and SQLite database features that require System.Data.SQLite.
+
+**Option A: Manual Install (Recommended - 2 minutes)**
+
+1. Download SQLite for .NET:
+   - **Direct Link**: https://system.data.sqlite.org/downloads/1.0.118.0/sqlite-netFx46-binary-x64-2015-1.0.118.0.zip
+   - **Or browse**: https://system.data.sqlite.org/index.html/doc/trunk/www/downloads.wiki
+   
+2. Extract the ZIP file
+
+3. Copy these files to `C:\Tools\AD-Audit\Libraries\`:
+   - `System.Data.SQLite.dll`
+   - `SQLite.Interop.dll` (important!)
+
+4. Verify installation:
+```powershell
+# Check if DLLs exist
+Test-Path ".\Libraries\System.Data.SQLite.dll"  # Should return True
+Test-Path ".\Libraries\SQLite.Interop.dll"      # Should return True
+```
+
+**Option B: Automated Install (Experimental)**
+
+```powershell
+.\Install-SQLite-Simple.ps1
+```
+
+**Note**: If automated install fails, use manual Option A above.
+
+**What needs SQLite?**
+- ✅ Web Query Builder (`Start-M&A-QueryBuilder-Web.ps1`)
+- ✅ SQLite database creation (`-CreateDatabase` parameter)
+- ✅ Advanced reporting features
+
+**Can I skip this?**
+- Yes, if you only use CSV exports and HTML reports
+- No, if you want the query builder or database features
+
+### Step 5: Pre-Install Modules (Optional but Recommended)
 
 The script will auto-install modules on first run, but pre-installing saves time:
 
