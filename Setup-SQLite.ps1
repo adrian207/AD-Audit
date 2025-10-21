@@ -91,15 +91,13 @@ catch {
     
     # Option 2: Direct download from SQLite.org
     try {
-        # Determine architecture
+        # Determine architecture and version
         $arch = if ([Environment]::Is64BitOperatingSystem) { "x64" } else { "x86" }
-        
-        # SQLite version (update this as needed)
         $version = "1.0.118"
         $year = "2023"
         
-        # Download URL (example - may need to be updated)
-        $downloadUrl = "https://system.data.sqlite.org/blobs/$version/sqlite-netFx46-binary-x64-$year-$version.zip"
+        # Download URL
+        $downloadUrl = "https://system.data.sqlite.org/blobs/$version/sqlite-netFx46-binary-$arch-$year-$version.zip"
         
         Write-Host "Downloading from: $downloadUrl" -ForegroundColor Yellow
         
