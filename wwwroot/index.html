@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>M&A Audit Query Builder</title>
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <!-- Custom CSS -->
+    <link href="/assets/css/styles.css" rel="stylesheet">
+</head>
+<body>
+    <nav class="navbar navbar-dark bg-primary">
+        <div class="container-fluid">
+            <span class="navbar-brand mb-0 h1">
+                <i class="fas fa-database"></i> M&A Audit Query Builder
+            </span>
+            <span class="navbar-text text-white">
+                <small id="dbStatus">No database connected</small>
+            </span>
+        </div>
+    </nav>
+
+    <div class="container-fluid mt-3">
+        <div class="row">
+            <!-- Left Panel: Query Builder -->
+            <div class="col-md-8">
+                <!-- Database Connection -->
+                <div class="card mb-3">
+                    <div class="card-header bg-light">
+                        <h5 class="mb-0"><i class="fas fa-plug"></i> Database Connection</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="dbPath" placeholder="Path to AuditData.db (auto-detected if available)">
+                            <button class="btn btn-primary" onclick="connectDatabase()">
+                                <i class="fas fa-link"></i> Connect
+                            </button>
+                        </div>
+                        <small class="text-muted">Database path will be auto-detected from server if available</small>
+                    </div>
+                </div>
+
+                <!-- Table & Column Selection -->
+                <div class="card mb-3" id="queryCard" style="display:none;">
+                    <div class="card-header bg-light">
+                        <h5 class="mb-0"><i class="fas fa-table"></i> 1. Select Table & Columns</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Table</label>
+                                <select class="form-select" id="tableSelect" onchange="loadColumns()">
+                                    <option value="">Select a table...</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Quick Actions</label>
+                                <div class="btn-group d-block" role="group">
+                                    <button class="btn btn-sm btn-outline-secondary" onclick="selectAllColumns()">
+                                        <i class="fas fa-check-square"></i> Select All
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-secondary" onclick="deselectAllColumns()">
+                                        <i class="fas fa-square"></i> Deselect All
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-info" onclick="viewSampleData()">
+                                        <i class="fas fa-eye"></i> View Sample
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <label class="form-label">Columns to Display</label>
+                        <div id="columnsList" class="border rounded p-3" style="max-height: 200px; overflow-y: auto;">
+                            <p class="text-muted mb-0">Select a table to see available columns</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- WHERE Clause Builder -->
+                <div class="card mb-3" id="filtersCard" style="display:none;">
+                    <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0"><i class="fas fa-filter"></i> 2. Add Filters (WHERE)</h5>
+                        <button class="btn btn-sm btn-success" onclick="addFilter()">
+                            <i class="fas fa-plus"></i> Add Filter
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        <div id="filtersList">
+                            <p class="text-muted">No filters added. Click "Add Filter" to start building your WHERE clause.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SQL Preview & Execution -->
+                <div class="card mb-3" id="sqlCard" style="display:none;">
+                    <div class="card-header bg-light">
+                        <h5 class="mb-0"><i class="fas fa-code"></i> Generated SQL</h5>
+                    </div>
+                    <div class="card-body">
+                        <pre id="sqlPreview" class="bg-dark text-light p-3 rounded" style="max-height: 200px; overflow-y: auto;"><code>-- SQL will appear here</code></pre>
+                        <div class="d-flex gap-2">
+                            <button class="btn btn-success btn-lg" onclick="executeQuery()">
+                                <i class="fas fa-play"></i> Execute Query
+                            </button>
+                            <button class="btn btn-secondary" onclick="copySQL()">
+                                <i class="fas fa-copy"></i> Copy SQL
+                            </button>
+                            <button class="btn btn-outline-secondary" onclick="resetQuery()">
+                                <i class="fas fa-redo"></i> Reset
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Results -->
+                <div class="card mb-3" id="resultsCard" style="display:none;">
+                    <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0"><i class="fas fa-table"></i> Results <span id="rowCount" class="badge bg-light text-dark ms-2">0 rows</span></h5>
+                        <div>
+                            <span id="executionTime" class="me-3 small"></span>
+                            <button class="btn btn-sm btn-light" onclick="exportCSV()">
+                                <i class="fas fa-download"></i> Export CSV
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body p-0">
+                        <div id="resultsTable" style="max-height: 500px; overflow: auto;"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Panel: Templates & Help -->
+            <div class="col-md-4">
+                <!-- Query Templates -->
+                <div class="card mb-3">
+                    <div class="card-header bg-info text-white">
+                        <h5 class="mb-0"><i class="fas fa-star"></i> Query Templates</h5>
+                    </div>
+                    <div class="card-body p-0">
+                        <div id="templatesList" class="list-group list-group-flush">
+                            <div class="list-group-item text-muted">
+                                <i class="fas fa-spinner fa-spin"></i> Loading templates...
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Help & Tips -->
+                <div class="card mb-3">
+                    <div class="card-header bg-light">
+                        <h5 class="mb-0"><i class="fas fa-question-circle"></i> Help & Tips</h5>
+                    </div>
+                    <div class="card-body">
+                        <h6>Quick Start:</h6>
+                        <ol class="small">
+                            <li>Click "Connect" to link to database</li>
+                            <li>Select a table from dropdown</li>
+                            <li>Choose columns to display</li>
+                            <li>Add filters (optional)</li>
+                            <li>Click "Execute Query"</li>
+                        </ol>
+                        
+                        <h6 class="mt-3">Tips:</h6>
+                        <ul class="small">
+                            <li>Use templates for common queries</li>
+                            <li>View sample data to understand table structure</li>
+                            <li>LIKE operator uses wildcards automatically</li>
+                            <li>Results are limited to 1000 rows max</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Database Info -->
+                <div class="card" id="dbInfoCard" style="display:none;">
+                    <div class="card-header bg-light">
+                        <h6 class="mb-0"><i class="fas fa-info-circle"></i> Database Info</h6>
+                    </div>
+                    <div class="card-body">
+                        <dl class="row mb-0 small">
+                            <dt class="col-sm-5">Tables:</dt>
+                            <dd class="col-sm-7" id="tableCount">-</dd>
+                            <dt class="col-sm-5">Path:</dt>
+                            <dd class="col-sm-7 text-break" id="dbPathDisplay">-</dd>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Modal -->
+    <div class="modal fade" id="loadingModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-body text-center p-4">
+                    <div class="spinner-border text-primary mb-3" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <h5 id="loadingMessage">Processing...</h5>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="bg-light text-center py-3 mt-5">
+        <small class="text-muted">
+            M&A Technical Discovery Audit Tool | Query Builder v1.0 | 
+            Author: Adrian Johnson &lt;adrian207@gmail.com&gt;
+        </small>
+    </footer>
+
+    <!-- jQuery -->
+    <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Custom JS -->
+    <script src="/assets/js/app.js"></script>
+</body>
+</html>
+
