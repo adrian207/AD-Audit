@@ -1,0 +1,259 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  release:
+    types: [ published ]
+
+jobs:
+  test:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        pwsh-version: ['7.4', '5.1']
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup PowerShell Core
+      if: matrix.pwsh-version != '5.1'
+      shell: pwsh
+      run: |
+        Write-Host "Using PowerShell Core ${{ matrix.pwsh-version }}"
+        $PSVersionTable
+        
+    - name: Setup Windows PowerShell
+      if: matrix.pwsh-version == '5.1'
+      shell: powershell
+      run: |
+        Write-Host "Using Windows PowerShell ${{ matrix.pwsh-version }}"
+        $PSVersionTable
+        
+    - name: Install Pester
+      shell: pwsh
+      run: |
+        Install-Module -Name Pester -Force -SkipPublisherCheck
+        Install-Module -Name PSScriptAnalyzer -Force -SkipPublisherCheck
+        
+    - name: Run PSScriptAnalyzer
+      shell: pwsh
+      run: |
+        $results = Invoke-ScriptAnalyzer -Path . -Recurse -Severity @('Error', 'Warning')
+        if ($results) {
+          Write-Host "ScriptAnalyzer found $($results.Count) issues:"
+          $results | ForEach-Object { Write-Host "  $($_.Severity): $($_.Message) at $($_.ScriptPath):$($_.Line)" }
+          exit 1
+        } else {
+          Write-Host "No ScriptAnalyzer issues found"
+        }
+        
+    - name: Run Pester Tests
+      shell: pwsh
+      run: |
+        $testResults = Invoke-Pester -Path .\Tests\ -OutputFile TestResults.xml -OutputFormat NUnitXml -PassThru
+        if ($testResults.FailedCount -gt 0) {
+          Write-Host "Pester tests failed: $($testResults.FailedCount) failures"
+          exit 1
+        } else {
+          Write-Host "All Pester tests passed: $($testResults.PassedCount) tests"
+        }
+        
+    - name: Upload Test Results
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: test-results-${{ matrix.pwsh-version }}
+        path: TestResults.xml
+        
+    - name: Test Module Import
+      shell: pwsh
+      run: |
+        try {
+          Import-Module .\AD-Audit.psd1 -Force
+          Write-Host "Module imported successfully"
+          
+          # Test exported functions
+          $exportedFunctions = (Get-Module AD-Audit).ExportedFunctions.Keys
+          Write-Host "Exported functions: $($exportedFunctions.Count)"
+          $exportedFunctions | ForEach-Object { Write-Host "  - $_" }
+          
+        } catch {
+          Write-Host "Module import failed: $_"
+          exit 1
+        }
+
+  build:
+    runs-on: windows-latest
+    needs: test
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+        
+    - name: Create Release Package
+      shell: pwsh
+      run: |
+        # Create release directory
+        $releaseDir = ".\Release"
+        New-Item -Path $releaseDir -ItemType Directory -Force
+        
+        # Copy module files
+        Copy-Item -Path ".\AD-Audit.psd1" -Destination $releaseDir
+        Copy-Item -Path ".\Modules" -Destination $releaseDir -Recurse
+        Copy-Item -Path ".\Libraries" -Destination $releaseDir -Recurse
+        Copy-Item -Path ".\Utilities" -Destination $releaseDir -Recurse
+        Copy-Item -Path ".\docs" -Destination $releaseDir -Recurse
+        Copy-Item -Path ".\Tests" -Destination $releaseDir -Recurse
+        Copy-Item -Path ".\README.md" -Destination $releaseDir
+        Copy-Item -Path ".\LICENSE" -Destination $releaseDir
+        Copy-Item -Path ".\CHANGELOG.md" -Destination $releaseDir
+        
+        # Create ZIP package
+        Compress-Archive -Path "$releaseDir\*" -DestinationPath "AD-Audit-v$env:GITHUB_REF_NAME.zip" -Force
+        
+        Write-Host "Release package created: AD-Audit-v$env:GITHUB_REF_NAME.zip"
+        
+    - name: Upload Release Package
+      uses: actions/upload-artifact@v3
+      with:
+        name: AD-Audit-Release
+        path: AD-Audit-v${{ github.ref_name }}.zip
+
+  publish-gallery:
+    runs-on: windows-latest
+    needs: [test, build]
+    if: github.event_name == 'release'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+        
+    - name: Install PowerShellGet
+      shell: pwsh
+      run: |
+        Install-Module -Name PowerShellGet -Force -SkipPublisherCheck
+        
+    - name: Publish to PowerShell Gallery
+      shell: pwsh
+      env:
+        POWERSHELL_GALLERY_API_KEY: ${{ secrets.POWERSHELL_GALLERY_API_KEY }}
+      run: |
+        if (-not $env:POWERSHELL_GALLERY_API_KEY) {
+          Write-Host "Error: POWERSHELL_GALLERY_API_KEY secret is not configured"
+          Write-Host "Please add the secret in GitHub repository settings under Settings > Secrets and variables > Actions"
+          exit 1
+        }
+        
+        try {
+          Publish-Module -Path . -NuGetApiKey $env:POWERSHELL_GALLERY_API_KEY -Force
+          Write-Host "Module published to PowerShell Gallery successfully"
+        } catch {
+          Write-Host "Failed to publish module: $_"
+          exit 1
+        }
+
+  security-scan:
+    runs-on: windows-latest
+    needs: test
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Run Security Scan
+      shell: pwsh
+      run: |
+        # Check for sensitive information
+        $sensitivePatterns = @(
+          'password\s*=\s*["''"][^"''"\\s]+["''"\\s]',
+          'pwd\s*=\s*["''"][^"''"\\s]+["''"\\s]',
+          'pass\s*=\s*["''"][^"''"\\s]+["''"\\s]',
+          'secret\s*=\s*["''"][^"''"\\s]+["''"\\s]',
+          'key\s*=\s*["''"][^"''"\\s]+["''"\\s]',
+          'token\s*=\s*["''"][^"''"\\s]+["''"\\s]'
+        )
+        
+        $issues = @()
+        Get-ChildItem -Path . -Recurse -Include "*.ps1", "*.psd1", "*.psm1" | ForEach-Object {
+          $content = Get-Content $_.FullName -Raw
+          foreach ($pattern in $sensitivePatterns) {
+            if ($content -match $pattern) {
+              $issues += "Potential sensitive information in $($_.FullName): $($matches[0])"
+            }
+          }
+        }
+        
+        if ($issues.Count -gt 0) {
+          Write-Host "Security scan found potential issues:"
+          $issues | ForEach-Object { Write-Host "  $_" }
+          exit 1
+        } else {
+          Write-Host "Security scan passed - no sensitive information detected"
+        }
+
+  documentation:
+    runs-on: windows-latest
+    needs: test
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+        
+    - name: Validate Documentation
+      shell: pwsh
+      run: |
+        # Check for required documentation files
+        $requiredDocs = @(
+          'README.md',
+          'LICENSE',
+          'CHANGELOG.md',
+          'CONTRIBUTING.md',
+          'docs\USER_GUIDE.md',
+          'docs\INSTALLATION.md',
+          'docs\TROUBLESHOOTING.md'
+        )
+        
+        $missingDocs = @()
+        foreach ($doc in $requiredDocs) {
+          if (-not (Test-Path $doc)) {
+            $missingDocs += $doc
+          }
+        }
+        
+        if ($missingDocs.Count -gt 0) {
+          Write-Host "Missing required documentation files:"
+          $missingDocs | ForEach-Object { Write-Host "  $_" }
+          exit 1
+        } else {
+          Write-Host "All required documentation files present"
+        }
+        
+        # Validate README.md has required sections
+        $readmeContent = Get-Content 'README.md' -Raw
+        $requiredSections = @(
+          '## 🚀 Features',
+          '## 📋 Prerequisites',
+          '## 🚀 Installation',
+          '## 📖 Quick Start',
+          '## 📊 Microsoft Compliance',
+          '## 📚 Documentation'
+        )
+        
+        $missingSections = @()
+        foreach ($section in $requiredSections) {
+          if ($readmeContent -notmatch [regex]::Escape($section)) {
+            $missingSections += $section
+          }
+        }
+        
+        if ($missingSections.Count -gt 0) {
+          Write-Host "Missing required README sections:"
+          $missingSections | ForEach-Object { Write-Host "  $_" }
+          exit 1
+        } else {
+          Write-Host "All required README sections present"
+        }
