@@ -2,11 +2,11 @@
 
 ![Tests](https://github.com/adrian207/AD-Audit/workflows/Pester%20Tests/badge.svg)
 ![PowerShell](https://img.shields.io/badge/PowerShell-5.1%2B-blue)
-![Version](https://img.shields.io/badge/version-2.1.0-green)
+![Version](https://img.shields.io/badge/version-2.3.0-green)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 
 **Author**: Adrian Johnson <adrian207@gmail.com>  
-**Version**: 2.1.0 - Enterprise Ready + Advanced AD Security
+**Version**: 2.3.0 - With Advanced Analytics & Reporting
 
 ## Quick Start (3 Simple Steps)
 
@@ -46,6 +46,62 @@ That's it! The audit runs automatically and saves all results to your chosen fol
 - All results encrypted by default
 - No passwords or sensitive data collected
 - Read-only operations (no changes made)
+
+---
+
+## 🚀 New in v2.3.0 - Advanced Analytics & Reporting
+
+### ✅ Complete Analytics Engine
+Transform audit data into actionable intelligence:
+
+**Baseline Comparison**: Track changes between audits
+- User, computer, server, and privileged account growth
+- SQL database size changes
+- Percent change calculations
+
+**Anomaly Detection**: Automatically discover 7 types of security risks
+- Privileged account growth (>10%)
+- Stale privileged accounts
+- Service account password issues
+- Kerberos unconstrained delegation
+- Dangerous ACL permissions
+- Database growth (>20%)
+- Servers going offline
+
+**Risk Scoring**: Quantify security posture (0-100 score)
+- Low Risk (80-100) ✅
+- Medium Risk (60-79) ⚠️
+- High Risk (40-59) 🔴
+- Critical Risk (0-39) 🚨
+
+**Executive Dashboards**: Beautiful HTML reports
+- Risk gauge with color-coded levels
+- Animated metric cards
+- Anomaly cards with recommendations
+- Responsive design (mobile-friendly)
+- Professional branding
+
+**Alert System**: Proactive email notifications
+- Configurable thresholds
+- HTML-formatted emails
+- Critical/High/Medium severity levels
+- Automatic triggering
+
+**Quick Start**:
+```powershell
+.\Start-M&A-Analytics.ps1 `
+    -BaselineAuditPath "baseline.db" `
+    -CurrentAuditPath "current.db" `
+    -OutputFolder "C:\Analytics" `
+    -CompanyName "Contoso" `
+    -GenerateDashboard `
+    -EnableAlerts `
+    -AlertEmail "admin@contoso.com" `
+    -SMTPServer "smtp.office365.com" `
+    -FromEmail "audit@contoso.com"
+```
+
+**See**: `docs/ANALYTICS_GUIDE.md` for complete documentation
 
 ---
 
