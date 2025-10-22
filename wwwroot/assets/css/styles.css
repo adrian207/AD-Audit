@@ -264,3 +264,98 @@ footer {
     }
 }
 
+/* ===== DARK MODE ===== */
+body.dark-mode {
+    background-color: #1a1a1a;
+    color: #e0e0e0;
+}
+
+body.dark-mode .card {
+    background-color: #2d2d2d;
+    color: #e0e0e0;
+}
+
+body.dark-mode .card-header {
+    background-color: #3a3a3a !important;
+    color: #ffffff;
+    border-bottom-color: #4a4a4a;
+}
+
+body.dark-mode .list-group-item {
+    background-color: #2d2d2d;
+    color: #e0e0e0;
+    border-color: #4a4a4a;
+}
+
+body.dark-mode .list-group-item-action:hover {
+    background-color: #3a3a3a;
+}
+
+body.dark-mode .form-control,
+body.dark-mode .form-select {
+    background-color: #3a3a3a;
+    color: #e0e0e0;
+    border-color: #4a4a4a;
+}
+
+body.dark-mode .form-control:focus,
+body.dark-mode .form-select:focus {
+    background-color: #3a3a3a;
+    color: #e0e0e0;
+    border-color: #0066cc;
+}
+
+body.dark-mode #sqlPreview {
+    background-color: #1a1a1a !important;
+}
+
+body.dark-mode #resultsTable {
+    background-color: #2d2d2d;
+}
+
+body.dark-mode #resultsTable thead {
+    background-color: #3a3a3a;
+}
+
+body.dark-mode #resultsTable tbody tr:hover {
+    background-color: #3a3a3a;
+}
+
+body.dark-mode .modal-content {
+    background-color: #2d2d2d;
+    color: #e0e0e0;
+}
+
+body.dark-mode .modal-header {
+    border-bottom-color: #4a4a4a;
+}
+
+body.dark-mode .modal-footer {
+    border-top-color: #4a4a4a;
+}
+
+body.dark-mode .btn-close {
+    filter: invert(1);
+}
+
+body.dark-mode .text-muted {
+    color: #aaa !important;
+}
+
+body.dark-mode ::-webkit-scrollbar-track {
+    background: #2d2d2d;
+}
+
+body.dark-mode ::-webkit-scrollbar-thumb {
+    background: #555;
+}
+
+body.dark-mode ::-webkit-scrollbar-thumb:hover {
+    background: #777;
+}
+
+body.dark-mode footer {
+    background-color: #2d2d2d !important;
+    border-top-color: #4a4a4a;
+}
+
