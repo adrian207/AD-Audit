@@ -149,10 +149,10 @@ function Test-ServerOnline {
     param(
         [Parameter(Mandatory = $true)]
         [string]$ComputerName,
-        
+
         [int]$TimeoutMS = 1000
     )
-    
+
     try {
         $ping = Test-Connection -ComputerName $ComputerName -Count 1 -Quiet -ErrorAction Stop
         return $ping
@@ -160,6 +160,95 @@ function Test-ServerOnline {
     catch {
         return $false
     }
+}
+
+function Invoke-WithRetry {
+    <#
+    .SYNOPSIS
+        Executes a script block with retry logic and exponential backoff
+
+    .DESCRIPTION
+        Retries failed operations with exponential backoff to handle transient network failures.
+        Useful for CIM sessions, WinEvent queries, and remote PowerShell invocations.
+
+    .PARAMETER ScriptBlock
+        The script block to execute with retry logic
+
+    .PARAMETER MaxAttempts
+        Maximum number of retry attempts (default: 3)
+
+    .PARAMETER InitialDelaySeconds
+        Initial delay in seconds before first retry (default: 2)
+        Subsequent delays use exponential backoff: 2s, 4s, 8s
+
+    .PARAMETER RetryableErrors
+        Array of error message patterns that should trigger a retry
+        Default: Network, timeout, and RPC errors
+
+    .EXAMPLE
+        $session = Invoke-WithRetry -ScriptBlock {
+            New-CimSession -ComputerName $serverName -ErrorAction Stop
+        }
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [ScriptBlock]$ScriptBlock,
+
+        [int]$MaxAttempts = 3,
+
+        [int]$InitialDelaySeconds = 2,
+
+        [string[]]$RetryableErrors = @(
+            'network',
+            'timeout',
+            'RPC server',
+            'WinRM',
+            'Access is denied',
+            'The operation has timed out',
+            'No connection could be made'
+        )
+    )
+
+    $attempt = 1
+    $lastError = $null
+
+    while ($attempt -le $MaxAttempts) {
+        try {
+            # Execute the script block
+            $result = & $ScriptBlock
+            return $result
+        }
+        catch {
+            $lastError = $_
+            $errorMessage = $_.Exception.Message
+
+            # Check if this is a retryable error
+            $isRetryable = $false
+            foreach ($pattern in $RetryableErrors) {
+                if ($errorMessage -match $pattern) {
+                    $isRetryable = $true
+                    break
+                }
+            }
+
+            # If not retryable or last attempt, throw the error
+            if (-not $isRetryable -or $attempt -eq $MaxAttempts) {
+                throw
+            }
+
+            # Calculate exponential backoff delay
+            $delay = $InitialDelaySeconds * [math]::Pow(2, $attempt - 1)
+
+            Write-Verbose "Attempt $attempt failed: $errorMessage. Retrying in $delay seconds..."
+            Start-Sleep -Seconds $delay
+
+            $attempt++
+        }
+    }
+
+    # Should never reach here, but throw last error just in case
+    throw $lastError
 }
 
 #endregion
@@ -488,12 +577,36 @@ function Get-ServerHardwareInventory {
                 $result.Online = $true
             }
             
-            # Query hardware via CIM
+            # Query hardware via CIM with retry logic
             $cimSession = $null
             try {
                 $sessionOption = New-CimSessionOption -Protocol Dcom
-                $cimSession = New-CimSession -ComputerName $serverName -SessionOption $sessionOption -OperationTimeoutSec $timeout -ErrorAction Stop
-                
+
+                # Retry CIM session creation up to 3 times with exponential backoff
+                $maxRetries = 3
+                $retryDelay = 2
+                $sessionCreated = $false
+
+                for ($retry = 1; $retry -le $maxRetries; $retry++) {
+                    try {
+                        $cimSession = New-CimSession -ComputerName $serverName -SessionOption $sessionOption -OperationTimeoutSec $timeout -ErrorAction Stop
+                        $sessionCreated = $true
+                        break
+                    }
+                    catch {
+                        if ($retry -eq $maxRetries) {
+                            throw
+                        }
+                        $delay = $retryDelay * [math]::Pow(2, $retry - 1)
+                        Write-Verbose "CIM session to $serverName failed (attempt $retry/$maxRetries). Retrying in $delay seconds..."
+                        Start-Sleep -Seconds $delay
+                    }
+                }
+
+                if (-not $sessionCreated) {
+                    throw "Failed to create CIM session after $maxRetries attempts"
+                }
+
                 # Computer System
                 $cs = Get-CimInstance -CimSession $cimSession -ClassName Win32_ComputerSystem -ErrorAction Stop
                 $result.Manufacturer = $cs.Manufacturer
@@ -667,9 +780,27 @@ function Get-ServerApplications {
                 
                 return $apps
             }
-            
-            $apps = Invoke-Command -ComputerName $serverName -ScriptBlock $scriptBlock -ErrorAction Stop
-            
+
+            # Retry Invoke-Command up to 3 times with exponential backoff
+            $maxRetries = 3
+            $retryDelay = 2
+            $apps = $null
+
+            for ($retry = 1; $retry -le $maxRetries; $retry++) {
+                try {
+                    $apps = Invoke-Command -ComputerName $serverName -ScriptBlock $scriptBlock -ErrorAction Stop
+                    break
+                }
+                catch {
+                    if ($retry -eq $maxRetries) {
+                        throw
+                    }
+                    $delay = $retryDelay * [math]::Pow(2, $retry - 1)
+                    Write-Verbose "Invoke-Command to $serverName failed (attempt $retry/$maxRetries). Retrying in $delay seconds..."
+                    Start-Sleep -Seconds $delay
+                }
+            }
+
             foreach ($app in $apps) {
                 $resultBag.Add([PSCustomObject]@{
                     ServerName = $serverName
@@ -737,14 +868,20 @@ function Get-ServerEventLogs {
         $startDate = $using:startDate
         
         try {
-            # Query Critical events
+            # Query Critical events with retry logic
             $criticalFilter = @{
                 LogName = 'System', 'Application'
                 Level = 1  # Critical
                 StartTime = $startDate
             }
-            
-            $criticals = Get-WinEvent -ComputerName $serverName -FilterHashtable $criticalFilter -ErrorAction SilentlyContinue |
+
+            $maxRetries = 3
+            $retryDelay = 2
+            $criticals = $null
+
+            for ($retry = 1; $retry -le $maxRetries; $retry++) {
+                try {
+                    $criticals = Get-WinEvent -ComputerName $serverName -FilterHashtable $criticalFilter -ErrorAction Stop |
                 Group-Object Id, ProviderName |
                 Select-Object @{N='ServerName';E={$serverName}},
                              @{N='EventID';E={$_.Group[0].Id}},
@@ -761,19 +898,35 @@ function Get-ServerEventLogs {
                                      'No message'
                                  }
                              }}
-            
+                    break
+                }
+                catch {
+                    if ($retry -eq $maxRetries) {
+                        Write-Verbose "Failed to query critical events from $serverName after $maxRetries attempts: $_"
+                        $criticals = @()  # Empty array on final failure
+                        break
+                    }
+                    $delay = $retryDelay * [math]::Pow(2, $retry - 1)
+                    Write-Verbose "Query critical events from $serverName failed (attempt $retry/$maxRetries). Retrying in $delay seconds..."
+                    Start-Sleep -Seconds $delay
+                }
+            }
+
             foreach ($event in $criticals) {
                 $criticalBag.Add($event)
             }
-            
-            # Query Error events
+
+            # Query Error events with retry logic
             $errorFilter = @{
                 LogName = 'System', 'Application'
                 Level = 2  # Error
                 StartTime = $startDate
             }
-            
-            $errors = Get-WinEvent -ComputerName $serverName -FilterHashtable $errorFilter -MaxEvents 1000 -ErrorAction SilentlyContinue |
+
+            $errors = $null
+            for ($retry = 1; $retry -le $maxRetries; $retry++) {
+                try {
+                    $errors = Get-WinEvent -ComputerName $serverName -FilterHashtable $errorFilter -MaxEvents 1000 -ErrorAction Stop |
                 Group-Object Id, ProviderName |
                 Select-Object @{N='ServerName';E={$serverName}},
                              @{N='EventID';E={$_.Group[0].Id}},
@@ -790,11 +943,24 @@ function Get-ServerEventLogs {
                                      'No message'
                                  }
                              }}
-            
+                    break
+                }
+                catch {
+                    if ($retry -eq $maxRetries) {
+                        Write-Verbose "Failed to query error events from $serverName after $maxRetries attempts: $_"
+                        $errors = @()  # Empty array on final failure
+                        break
+                    }
+                    $delay = $retryDelay * [math]::Pow(2, $retry - 1)
+                    Write-Verbose "Query error events from $serverName failed (attempt $retry/$maxRetries). Retrying in $delay seconds..."
+                    Start-Sleep -Seconds $delay
+                }
+            }
+
             foreach ($event in $errors) {
                 $errorBag.Add($event)
             }
-            
+
             Write-Verbose "Collected event logs from $serverName"
         }
         catch {
@@ -852,15 +1018,33 @@ function Get-ServerLogonHistory {
         $startDate = $using:startDate
         
         try {
-            # Query successful logons (Event ID 4624)
+            # Query successful logons (Event ID 4624) with retry logic
             $logonFilter = @{
                 LogName = 'Security'
                 ID = 4624
                 StartTime = $startDate
             }
-            
-            $logons = Get-WinEvent -ComputerName $serverName -FilterHashtable $logonFilter -MaxEvents 10000 -ErrorAction SilentlyContinue
-            
+
+            $maxRetries = 3
+            $retryDelay = 2
+            $logons = $null
+
+            for ($retry = 1; $retry -le $maxRetries; $retry++) {
+                try {
+                    $logons = Get-WinEvent -ComputerName $serverName -FilterHashtable $logonFilter -MaxEvents 10000 -ErrorAction Stop
+                    break
+                }
+                catch {
+                    if ($retry -eq $maxRetries) {
+                        Write-Verbose "Failed to query logon events from $serverName after $maxRetries attempts: $_"
+                        break
+                    }
+                    $delay = $retryDelay * [math]::Pow(2, $retry - 1)
+                    Write-Verbose "Query logon events from $serverName failed (attempt $retry/$maxRetries). Retrying in $delay seconds..."
+                    Start-Sleep -Seconds $delay
+                }
+            }
+
             if ($logons) {
                 $logonSummary = $logons | ForEach-Object {
                     $xml = [xml]$_.ToXml()
@@ -893,15 +1077,30 @@ function Get-ServerLogonHistory {
                 }
             }
             
-            # Query failed logons (Event ID 4625)
+            # Query failed logons (Event ID 4625) with retry logic
             $failureFilter = @{
                 LogName = 'Security'
                 ID = 4625
                 StartTime = $startDate
             }
-            
-            $failures = Get-WinEvent -ComputerName $serverName -FilterHashtable $failureFilter -MaxEvents 5000 -ErrorAction SilentlyContinue
-            
+
+            $failures = $null
+            for ($retry = 1; $retry -le $maxRetries; $retry++) {
+                try {
+                    $failures = Get-WinEvent -ComputerName $serverName -FilterHashtable $failureFilter -MaxEvents 5000 -ErrorAction Stop
+                    break
+                }
+                catch {
+                    if ($retry -eq $maxRetries) {
+                        Write-Verbose "Failed to query failed logon events from $serverName after $maxRetries attempts: $_"
+                        break
+                    }
+                    $delay = $retryDelay * [math]::Pow(2, $retry - 1)
+                    Write-Verbose "Query failed logon events from $serverName failed (attempt $retry/$maxRetries). Retrying in $delay seconds..."
+                    Start-Sleep -Seconds $delay
+                }
+            }
+
             if ($failures) {
                 $failureSummary = $failures | ForEach-Object {
                     $xml = [xml]$_.ToXml()
