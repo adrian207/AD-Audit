@@ -9,6 +9,8 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <!-- Font Awesome -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <!-- Custom CSS -->
     <link href="/assets/css/styles.css" rel="stylesheet">
 </head>
@@ -18,7 +20,10 @@
             <span class="navbar-brand mb-0 h1">
                 <i class="fas fa-database"></i> M&A Audit Query Builder
             </span>
-            <span class="navbar-text text-white">
+            <span class="navbar-text text-white d-flex align-items-center gap-3">
+                <button class="btn btn-sm btn-outline-light" onclick="toggleDarkMode()" title="Toggle Dark Mode">
+                    <i class="fas fa-moon" id="darkModeIcon"></i>
+                </button>
                 <small id="dbStatus">No database connected</small>
             </span>
         </div>
@@ -102,9 +107,12 @@
                     </div>
                     <div class="card-body">
                         <pre id="sqlPreview" class="bg-dark text-light p-3 rounded" style="max-height: 200px; overflow-y: auto;"><code>-- SQL will appear here</code></pre>
-                        <div class="d-flex gap-2">
+                        <div class="d-flex gap-2 flex-wrap">
                             <button class="btn btn-success btn-lg" onclick="executeQuery()">
                                 <i class="fas fa-play"></i> Execute Query
+                            </button>
+                            <button class="btn btn-primary" onclick="saveQuery()">
+                                <i class="fas fa-save"></i> Save Query
                             </button>
                             <button class="btn btn-secondary" onclick="copySQL()">
                                 <i class="fas fa-copy"></i> Copy SQL
@@ -122,8 +130,11 @@
                         <h5 class="mb-0"><i class="fas fa-table"></i> Results <span id="rowCount" class="badge bg-light text-dark ms-2">0 rows</span></h5>
                         <div>
                             <span id="executionTime" class="me-3 small"></span>
-                            <button class="btn btn-sm btn-light" onclick="exportCSV()">
+                            <button class="btn btn-sm btn-light me-2" onclick="exportCSV()">
                                 <i class="fas fa-download"></i> Export CSV
+                            </button>
+                            <button class="btn btn-sm btn-info" onclick="visualizeData()">
+                                <i class="fas fa-chart-bar"></i> Visualize
                             </button>
                         </div>
                     </div>
@@ -145,6 +156,33 @@
                             <div class="list-group-item text-muted">
                                 <i class="fas fa-spinner fa-spin"></i> Loading templates...
                             </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Saved Queries -->
+                <div class="card mb-3">
+                    <div class="card-header bg-success text-white">
+                        <h5 class="mb-0"><i class="fas fa-bookmark"></i> Saved Queries</h5>
+                    </div>
+                    <div class="card-body p-0">
+                        <div id="savedQueriesList" class="list-group list-group-flush" style="max-height: 300px; overflow-y: auto;">
+                            <div class="list-group-item text-muted">No saved queries yet</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Query History -->
+                <div class="card mb-3">
+                    <div class="card-header bg-warning text-dark d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0"><i class="fas fa-history"></i> Query History</h5>
+                        <button class="btn btn-sm btn-danger" onclick="clearHistory()">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                    <div class="card-body p-0">
+                        <div id="queryHistoryList" class="list-group list-group-flush" style="max-height: 300px; overflow-y: auto;">
+                            <div class="list-group-item text-muted">No history yet</div>
                         </div>
                     </div>
                 </div>

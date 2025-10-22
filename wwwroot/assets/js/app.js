@@ -328,6 +328,9 @@ function executeQuery() {
                 $('#rowCount').text(response.rowCount + ' rows');
                 $('#executionTime').text('Executed in ' + response.executionTime + ' ms');
                 
+                // Add to history
+                addToHistory(currentQuery, response.rowCount, response.executionTime + ' ms');
+                
                 showSuccess('Query executed successfully! Retrieved ' + response.rowCount + ' rows.');
                 
                 // Scroll to results
@@ -542,4 +545,458 @@ function showToast(message, type) {
         $(this).remove();
     });
 }
+
+// ===== SAVED QUERIES FEATURE =====
+
+// Save current query
+function saveQuery() {
+    const name = prompt('Enter a name for this query:');
+    if (!name) return;
+    
+    const description = prompt('Enter a description (optional):') || '';
+    
+    const queryData = {
+        name: name,
+        description: description,
+        query: currentQuery,
+        table: $('#tableSelect').val()
+    };
+    
+    $.ajax({
+        url: '/api/saved-queries',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify(queryData),
+        success: function(response) {
+            if (response.success) {
+                showSuccess('Query saved successfully!');
+                loadSavedQueries();
+            }
+        },
+        error: function() {
+            showError('Failed to save query');
+        }
+    });
+}
+
+// Load saved queries
+function loadSavedQueries() {
+    $.ajax({
+        url: '/api/saved-queries',
+        method: 'GET',
+        success: function(response) {
+            if (response.success) {
+                displaySavedQueries(response.queries);
+            }
+        }
+    });
+}
+
+// Display saved queries
+function displaySavedQueries(queries) {
+    const container = $('#savedQueriesList');
+    if (!container.length) return;
+    
+    container.empty();
+    
+    if (queries.length === 0) {
+        container.html('<div class="list-group-item text-muted">No saved queries yet</div>');
+        return;
+    }
+    
+    queries.forEach(query => {
+        const item = `
+            <div class="list-group-item list-group-item-action d-flex justify-content-between align-items-start">
+                <div class="flex-grow-1" onclick="loadSavedQuery('${query.id}')" style="cursor:pointer;">
+                    <h6 class="mb-1">${escapeHtml(query.name)}</h6>
+                    <p class="mb-0 small text-muted">${escapeHtml(query.description || 'No description')}</p>
+                    <small class="text-muted">${new Date(query.created).toLocaleString()}</small>
+                </div>
+                <button class="btn btn-sm btn-danger" onclick="deleteSavedQuery('${query.id}'); event.stopPropagation();">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </div>
+        `;
+        container.append(item);
+    });
+}
+
+// Load saved query
+function loadSavedQuery(queryId) {
+    $.ajax({
+        url: '/api/saved-queries',
+        method: 'GET',
+        success: function(response) {
+            if (response.success) {
+                const query = response.queries.find(q => q.id === queryId);
+                if (query) {
+                    currentQuery = query.query;
+                    $('#sqlPreview code').text(query.query);
+                    showSuccess('Loaded: ' + query.name);
+                }
+            }
+        }
+    });
+}
+
+// Delete saved query
+function deleteSavedQuery(queryId) {
+    if (!confirm('Are you sure you want to delete this saved query?')) return;
+    
+    $.ajax({
+        url: '/api/saved-queries/' + queryId,
+        method: 'DELETE',
+        success: function(response) {
+            if (response.success) {
+                showSuccess('Query deleted');
+                loadSavedQueries();
+            }
+        },
+        error: function() {
+            showError('Failed to delete query');
+        }
+    });
+}
+
+// ===== QUERY HISTORY FEATURE =====
+
+// Add to history
+function addToHistory(query, rowCount, executionTime) {
+    const historyData = {
+        query: query,
+        table: $('#tableSelect').val(),
+        rowCount: rowCount,
+        executionTime: executionTime
+    };
+    
+    $.ajax({
+        url: '/api/query-history',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify(historyData),
+        success: function() {
+            loadQueryHistory();
+        }
+    });
+}
+
+// Load query history
+function loadQueryHistory() {
+    $.ajax({
+        url: '/api/query-history',
+        method: 'GET',
+        success: function(response) {
+            if (response.success) {
+                displayQueryHistory(response.history);
+            }
+        }
+    });
+}
+
+// Display query history
+function displayQueryHistory(history) {
+    const container = $('#queryHistoryList');
+    if (!container.length) return;
+    
+    container.empty();
+    
+    if (history.length === 0) {
+        container.html('<div class="list-group-item text-muted">No query history yet</div>');
+        return;
+    }
+    
+    history.slice(0, 20).forEach(entry => {
+        const timestamp = new Date(entry.timestamp).toLocaleString();
+        const queryPreview = entry.query.substring(0, 100) + (entry.query.length > 100 ? '...' : '');
+        
+        const item = `
+            <div class="list-group-item list-group-item-action" onclick="loadHistoryQuery('${entry.id}')" style="cursor:pointer;">
+                <div class="d-flex w-100 justify-content-between">
+                    <small class="text-muted">${timestamp}</small>
+                    <span class="badge bg-info">${entry.rowCount} rows</span>
+                </div>
+                <p class="mb-0 small font-monospace">${escapeHtml(queryPreview)}</p>
+                <small class="text-muted">${entry.executionTime}</small>
+            </div>
+        `;
+        container.append(item);
+    });
+}
+
+// Load history query
+function loadHistoryQuery(entryId) {
+    $.ajax({
+        url: '/api/query-history',
+        method: 'GET',
+        success: function(response) {
+            if (response.success) {
+                const entry = response.history.find(h => h.id === entryId);
+                if (entry) {
+                    currentQuery = entry.query;
+                    $('#sqlPreview code').text(entry.query);
+                    showSuccess('Query loaded from history');
+                }
+            }
+        }
+    });
+}
+
+// Clear history
+function clearHistory() {
+    if (!confirm('Are you sure you want to clear all query history?')) return;
+    
+    $.ajax({
+        url: '/api/query-history',
+        method: 'DELETE',
+        success: function(response) {
+            if (response.success) {
+                showSuccess('History cleared');
+                loadQueryHistory();
+            }
+        }
+    });
+}
+
+// ===== DARK MODE FEATURE =====
+
+// Toggle dark mode
+function toggleDarkMode() {
+    const isDark = $('body').hasClass('dark-mode');
+    
+    if (isDark) {
+        $('body').removeClass('dark-mode');
+        localStorage.setItem('darkMode', 'false');
+        $('#darkModeIcon').removeClass('fa-sun').addClass('fa-moon');
+    } else {
+        $('body').addClass('dark-mode');
+        localStorage.setItem('darkMode', 'true');
+        $('#darkModeIcon').removeClass('fa-moon').addClass('fa-sun');
+    }
+}
+
+// Initialize dark mode from localStorage
+function initDarkMode() {
+    const darkMode = localStorage.getItem('darkMode');
+    if (darkMode === 'true') {
+        $('body').addClass('dark-mode');
+        $('#darkModeIcon').removeClass('fa-moon').addClass('fa-sun');
+    }
+}
+
+// ===== CHART VISUALIZATION FEATURE =====
+
+// Create chart from results
+function visualizeData() {
+    if (currentResults.length === 0) {
+        showError('No data to visualize');
+        return;
+    }
+    
+    // Find numeric columns
+    const firstRow = currentResults[0];
+    const columns = Object.keys(firstRow);
+    const numericColumns = columns.filter(col => {
+        const value = firstRow[col];
+        return !isNaN(value) && value !== null && value !== '';
+    });
+    
+    if (numericColumns.length === 0) {
+        showError('No numeric columns found for visualization');
+        return;
+    }
+    
+    // Show chart modal with column selection
+    showChartModal(columns, numericColumns);
+}
+
+// Show chart configuration modal
+function showChartModal(columns, numericColumns) {
+    const modal = `
+        <div class="modal fade" id="chartModal" tabindex="-1">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Create Chart</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="form-label">Chart Type</label>
+                            <select class="form-select" id="chartType">
+                                <option value="bar">Bar Chart</option>
+                                <option value="line">Line Chart</option>
+                                <option value="pie">Pie Chart</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Label Column (X-Axis)</label>
+                            <select class="form-select" id="labelColumn">
+                                ${columns.map(col => `<option value="${col}">${col}</option>`).join('')}
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Value Column (Y-Axis)</label>
+                            <select class="form-select" id="valueColumn">
+                                ${numericColumns.map(col => `<option value="${col}">${col}</option>`).join('')}
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Max Data Points</label>
+                            <input type="number" class="form-control" id="maxPoints" value="20" min="5" max="100">
+                        </div>
+                        <canvas id="previewChart" width="400" height="200"></canvas>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                        <button type="button" class="btn btn-primary" onclick="generateChart()">Generate Chart</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Remove old modal if exists
+    $('#chartModal').remove();
+    $('body').append(modal);
+    
+    const chartModal = new bootstrap.Modal($('#chartModal')[0]);
+    chartModal.show();
+}
+
+// Generate chart
+function generateChart() {
+    const chartType = $('#chartType').val();
+    const labelColumn = $('#labelColumn').val();
+    const valueColumn = $('#valueColumn').val();
+    const maxPoints = parseInt($('#maxPoints').val());
+    
+    // Get data
+    const data = currentResults.slice(0, maxPoints);
+    const labels = data.map(row => row[labelColumn]);
+    const values = data.map(row => parseFloat(row[valueColumn]) || 0);
+    
+    // Create chart
+    const ctx = document.getElementById('previewChart').getContext('2d');
+    
+    // Destroy existing chart if any
+    if (window.currentChart) {
+        window.currentChart.destroy();
+    }
+    
+    window.currentChart = new Chart(ctx, {
+        type: chartType,
+        data: {
+            labels: labels,
+            datasets: [{
+                label: valueColumn,
+                data: values,
+                backgroundColor: chartType === 'pie' ? 
+                    generateColors(values.length) : 
+                    'rgba(54, 162, 235, 0.5)',
+                borderColor: 'rgba(54, 162, 235, 1)',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    display: chartType === 'pie'
+                },
+                title: {
+                    display: true,
+                    text: `${valueColumn} by ${labelColumn}`
+                }
+            }
+        }
+    });
+    
+    showSuccess('Chart generated!');
+}
+
+// Generate colors for pie chart
+function generateColors(count) {
+    const colors = [];
+    for (let i = 0; i < count; i++) {
+        const hue = (i * 360 / count) % 360;
+        colors.push(`hsla(${hue}, 70%, 60%, 0.7)`);
+    }
+    return colors;
+}
+
+// ===== ADVANCED FILTERS =====
+
+// Add IN filter
+function addInFilter() {
+    const field = prompt('Enter field name:');
+    if (!field) return;
+    
+    const values = prompt('Enter comma-separated values:');
+    if (!values) return;
+    
+    const valueList = values.split(',').map(v => `'${v.trim()}'`).join(', ');
+    const filter = `${field} IN (${valueList})`;
+    
+    // Add to filters manually
+    const filterDiv = `
+        <div class="filter-item mb-2 p-2 border rounded">
+            <span class="me-2">AND</span>
+            <code>${filter}</code>
+            <button class="btn btn-sm btn-danger float-end" onclick="$(this).parent().remove(); buildQuery();">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+    `;
+    
+    $('#filtersList').append(filterDiv);
+    buildQuery();
+}
+
+// Add BETWEEN filter
+function addBetweenFilter() {
+    const field = prompt('Enter field name:');
+    if (!field) return;
+    
+    const start = prompt('Enter start value:');
+    if (!start) return;
+    
+    const end = prompt('Enter end value:');
+    if (!end) return;
+    
+    const filter = `${field} BETWEEN ${start} AND ${end}`;
+    
+    const filterDiv = `
+        <div class="filter-item mb-2 p-2 border rounded">
+            <span class="me-2">AND</span>
+            <code>${filter}</code>
+            <button class="btn btn-sm btn-danger float-end" onclick="$(this).parent().remove(); buildQuery();">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+    `;
+    
+    $('#filtersList').append(filterDiv);
+    buildQuery();
+}
+
+// ===== UTILITY FUNCTIONS =====
+
+// Escape HTML
+function escapeHtml(text) {
+    const map = {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;'
+    };
+    return text.replace(/[&<>"']/g, m => map[m]);
+}
+
+// Initialize new features on page load
+$(document).ready(function() {
+    initDarkMode();
+    loadSavedQueries();
+    loadQueryHistory();
+});
 
