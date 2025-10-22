@@ -1,0 +1,151 @@
+name: Pester Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Run Pester Tests
+    runs-on: windows-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Display PowerShell version
+        shell: pwsh
+        run: |
+          Write-Host "PowerShell Version:"
+          $PSVersionTable
+      
+      - name: Install Pester
+        shell: pwsh
+        run: |
+          Write-Host "Installing Pester 5.x..."
+          Install-Module -Name Pester -Force -SkipPublisherCheck -Scope CurrentUser
+          Import-Module Pester
+          Write-Host "Pester $($(Get-Module Pester).Version) installed"
+      
+      - name: Run Pester tests
+        shell: pwsh
+        run: |
+          cd Tests
+          Write-Host "Running Pester tests..."
+          ./RunTests.ps1 -OutputFormat NUnitXml -CodeCoverage -PassThru
+        continue-on-error: false
+      
+      - name: Publish test results
+        uses: EnricoMi/publish-unit-test-result-action/windows@v2
+        if: always()
+        with:
+          files: Tests/TestResults/TestResults.xml
+          check_name: 'Pester Test Results'
+          report_individual_runs: true
+      
+      - name: Publish code coverage
+        uses: codecov/codecov-action@v3
+        if: always()
+        with:
+          files: Tests/coverage.xml
+          flags: unittests
+          name: codecov-umbrella
+          fail_ci_if_error: false
+      
+      - name: Upload test results artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results
+          path: Tests/TestResults/
+          retention-days: 30
+      
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report
+          path: Tests/coverage.xml
+          retention-days: 30
+      
+      - name: Check test results
+        shell: pwsh
+        run: |
+          if (Test-Path "Tests/TestResults/TestResults.xml") {
+            [xml]$results = Get-Content "Tests/TestResults/TestResults.xml"
+            $failures = $results.'test-results'.failures
+            if ([int]$failures -gt 0) {
+              Write-Error "Tests failed: $failures test(s) failed"
+              exit 1
+            }
+            Write-Host "✓ All tests passed!" -ForegroundColor Green
+          } else {
+            Write-Error "Test results file not found"
+            exit 1
+          }
+
+  lint:
+    name: PowerShell Script Analyzer
+    runs-on: windows-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Install PSScriptAnalyzer
+        shell: pwsh
+        run: |
+          Install-Module -Name PSScriptAnalyzer -Force -Scope CurrentUser
+      
+      - name: Run PSScriptAnalyzer
+        shell: pwsh
+        run: |
+          $results = Invoke-ScriptAnalyzer -Path . -Recurse -Settings PSGallery -Severity Error,Warning
+          
+          if ($results) {
+            Write-Host "Script Analyzer found issues:" -ForegroundColor Yellow
+            $results | Format-Table -AutoSize
+            
+            $errorCount = ($results | Where-Object Severity -eq 'Error').Count
+            $warningCount = ($results | Where-Object Severity -eq 'Warning').Count
+            
+            Write-Host "`nSummary:" -ForegroundColor Cyan
+            Write-Host "  Errors: $errorCount" -ForegroundColor $(if($errorCount -gt 0){'Red'}else{'Green'})
+            Write-Host "  Warnings: $warningCount" -ForegroundColor Yellow
+            
+            if ($errorCount -gt 0) {
+              Write-Error "Script Analyzer found $errorCount error(s)"
+              exit 1
+            }
+          } else {
+            Write-Host "✓ No issues found by Script Analyzer!" -ForegroundColor Green
+          }
+      
+      - name: Upload analysis results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: script-analyzer-results
+          path: PSScriptAnalyzer-Results.xml
+          retention-days: 30
+
+  build-status:
+    name: Build Status Check
+    runs-on: ubuntu-latest
+    needs: [test, lint]
+    if: always()
+    
+    steps:
+      - name: Check build status
+        run: |
+          if [ "${{ needs.test.result }}" == "success" ] && [ "${{ needs.lint.result }}" == "success" ]; then
+            echo "✓ Build passed!"
+            exit 0
+          else
+            echo "✗ Build failed!"
+            exit 1
+          fi
+

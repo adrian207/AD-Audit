@@ -522,6 +522,203 @@ function Export-AuditMetadata {
     Write-AuditLog "Metadata exported to: $metadataPath" -Level Success
 }
 
+function Send-AuditNotification {
+    <#
+    .SYNOPSIS
+        Sends email notification with audit completion summary
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $false)]
+        [string]$ToEmail,
+        
+        [Parameter(Mandatory = $false)]
+        [string]$SmtpServer = "smtp.office365.com",
+        
+        [Parameter(Mandatory = $false)]
+        [int]$SmtpPort = 587,
+        
+        [Parameter(Mandatory = $false)]
+        [PSCredential]$Credential
+    )
+    
+    if ([string]::IsNullOrWhiteSpace($ToEmail)) {
+        Write-AuditLog "No notification email configured - skipping email notification" -Level Info
+        return
+    }
+    
+    Write-AuditLog "Sending email notification to: $ToEmail" -Level Info
+    
+    try {
+        # Calculate summary stats
+        $endTime = Get-Date
+        $duration = ($endTime - $script:StartTime).TotalMinutes
+        
+        # Build email body
+        $emailBody = @"
+<html>
+<head>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 20px; background-color: #f5f5f5; }
+        .container { max-width: 800px; margin: 0 auto; background-color: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 8px 8px 0 0; margin: -30px -30px 20px -30px; }
+        h1 { margin: 0; font-size: 24px; }
+        .status { display: inline-block; padding: 8px 16px; border-radius: 4px; font-weight: bold; margin: 10px 0; }
+        .status-success { background-color: #10b981; color: white; }
+        .status-warning { background-color: #f59e0b; color: white; }
+        .status-error { background-color: #ef4444; color: white; }
+        .section { margin: 20px 0; padding: 15px; background-color: #f9fafb; border-left: 4px solid #667eea; border-radius: 4px; }
+        .section h2 { margin-top: 0; color: #374151; font-size: 18px; }
+        .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin: 15px 0; }
+        .metric { background-color: white; padding: 15px; border-radius: 6px; border: 1px solid #e5e7eb; text-align: center; }
+        .metric-value { font-size: 28px; font-weight: bold; color: #667eea; }
+        .metric-label { font-size: 12px; color: #6b7280; margin-top: 5px; }
+        .footer { margin-top: 20px; padding-top: 20px; border-top: 1px solid #e5e7eb; font-size: 12px; color: #6b7280; }
+        a { color: #667eea; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+        ul { padding-left: 20px; }
+        li { margin: 5px 0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎉 M&A Audit Complete</h1>
+            <p style="margin: 5px 0 0 0; opacity: 0.9;">$CompanyName Technical Discovery Audit</p>
+        </div>
+        
+        <div class="section">
+            <h2>Audit Summary</h2>
+            <span class="status status-$(if($script:FailedModules.Count -eq 0){'success'}else{'warning'})">
+                $(if($script:FailedModules.Count -eq 0){'✓ COMPLETED'}else{'⚠ COMPLETED WITH WARNINGS'})
+            </span>
+            
+            <div class="metrics">
+                <div class="metric">
+                    <div class="metric-value">$([math]::Round($duration, 1))m</div>
+                    <div class="metric-label">Duration</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-value">$($script:SuccessfulModules.Count)</div>
+                    <div class="metric-label">Modules Completed</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-value">$($script:FailedModules.Count)</div>
+                    <div class="metric-label">Modules Failed</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-value">$script:DataQualityScore%</div>
+                    <div class="metric-label">Data Quality</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="section">
+            <h2>Successful Modules</h2>
+            <ul>
+$(foreach ($module in $script:SuccessfulModules) {
+    "                <li>✓ $module</li>"
+})
+            </ul>
+        </div>
+        
+$(if ($script:FailedModules.Count -gt 0) {
+    @"
+        <div class="section" style="border-left-color: #f59e0b;">
+            <h2>⚠ Failed Modules</h2>
+            <ul>
+$(foreach ($module in $script:FailedModules) {
+    "                <li>✗ $module</li>"
+})
+            </ul>
+            <p><strong>Note:</strong> Check error log for details: <code>$($script:ErrorLog)</code></p>
+        </div>
+"@
+})
+        
+        <div class="section">
+            <h2>📂 Output Location</h2>
+            <p><code>$($script:AuditOutputFolder)</code></p>
+            
+            <h2>📊 Generated Reports</h2>
+            <ul>
+                <li><strong>Executive Summary:</strong> <code>index.html</code></li>
+                <li><strong>Active Directory Report:</strong> <code>active-directory.html</code></li>
+                <li><strong>Server Infrastructure:</strong> <code>servers.html</code></li>
+                <li><strong>SQL Databases:</strong> <code>sql-databases.html</code></li>
+                <li><strong>Security Analysis:</strong> <code>security.html</code></li>
+                <li><strong>Raw Data:</strong> <code>RawData/</code> folder (CSV files)</li>
+            </ul>
+        </div>
+        
+        <div class="section">
+            <h2>🔍 Next Steps</h2>
+            <ul>
+                <li>Review the executive summary dashboard (open <code>index.html</code>)</li>
+                <li>Check migration readiness score and key findings</li>
+                <li>Review detailed drill-down reports for each area</li>
+                <li>Analyze raw CSV data for custom queries</li>
+                <li>Document any security or compliance concerns</li>
+                <li>Share findings with stakeholders</li>
+            </ul>
+        </div>
+        
+        <div class="footer">
+            <p><strong>M&A Technical Discovery Script v$($script:ScriptVersion)</strong></p>
+            <p>Executed by: $env:USERDOMAIN\$env:USERNAME on $env:COMPUTERNAME</p>
+            <p>Start Time: $($script:StartTime.ToString('yyyy-MM-dd HH:mm:ss'))</p>
+            <p>End Time: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')</p>
+            <p style="margin-top: 15px;">
+                <em>This email was automatically generated by the M&A Audit Tool.</em><br>
+                For support or questions, contact your IT team or the tool administrator.
+            </p>
+        </div>
+    </div>
+</body>
+</html>
+"@
+        
+        $emailSubject = "✓ M&A Audit Complete - $CompanyName - Data Quality: $script:DataQualityScore%"
+        
+        # Prepare email parameters
+        $mailParams = @{
+            To = $ToEmail
+            Subject = $emailSubject
+            Body = $emailBody
+            BodyAsHtml = $true
+            SmtpServer = $SmtpServer
+            Port = $SmtpPort
+            UseSsl = $true
+        }
+        
+        # Add From address (use current user's email if available)
+        try {
+            $fromEmail = "$env:USERNAME@$($env:USERDNSDOMAIN)"
+            $mailParams['From'] = $fromEmail
+        }
+        catch {
+            # Fallback to generic sender
+            $mailParams['From'] = "noreply@audit.local"
+        }
+        
+        # Add credential if provided
+        if ($Credential) {
+            $mailParams['Credential'] = $Credential
+        }
+        
+        # Send email
+        Send-MailMessage @mailParams
+        
+        Write-AuditLog "Email notification sent successfully to: $ToEmail" -Level Success
+        Write-Host "✓ Email notification sent to: $ToEmail" -ForegroundColor Green
+    }
+    catch {
+        Write-AuditLog "Failed to send email notification: $_" -Level Warning
+        Write-Host "Warning: Failed to send email notification: $_" -ForegroundColor Yellow
+        Write-Host "You can manually check the audit results at: $script:AuditOutputFolder" -ForegroundColor Yellow
+    }
+}
+
 function Protect-AuditOutput {
     <#
     .SYNOPSIS
@@ -987,6 +1184,12 @@ try {
     catch {
         Write-AuditLog "Failed to generate HTML reports: $_" -Level Warning
         Write-Host "Warning: HTML report generation failed" -ForegroundColor Yellow
+    }
+    
+    # Send email notification (if configured)
+    if ($NotificationEmail) {
+        Write-Host ""
+        Send-AuditNotification -ToEmail $NotificationEmail
     }
     
     Write-AuditLog "Audit completed successfully" -Level Success
