@@ -182,7 +182,6 @@ function Get-ADForestInfo {
             SchemaMaster = $forest.SchemaMaster
             DomainNamingMaster = $forest.DomainNamingMaster
             RootDomain = $forest.RootDomain
-            ForestDN = $forest.RootDomain -replace '\.',',DC='
             ForestDN = "DC=$($forest.RootDomain -replace '\.',',DC=')"
             RecycleBinEnabled = $forest.RecycleBinEnabled
             UPNSuffixes = ($forest.UPNSuffixes -join '; ')
@@ -426,8 +425,7 @@ function Get-ServerHardwareInventory {
     Write-ModuleLog "Querying $MaxParallel servers in parallel (timeout: $TimeoutSeconds seconds each)" -Level Info
     
     $serverResults = [System.Collections.Concurrent.ConcurrentBag[object]]::new()
-    $processed = 0
-    
+
     # Process servers in batches
     $Servers | ForEach-Object -ThrottleLimit $MaxParallel -Parallel {
         $server = $_
@@ -435,14 +433,13 @@ function Get-ServerHardwareInventory {
         if ([string]::IsNullOrWhiteSpace($serverName)) {
             $serverName = $server.Name
         }
-        
+
         $resultBag = $using:serverResults
         $timeout = $using:TimeoutSeconds
         $skipOffline = $using:SkipOffline
-        
+
         # Progress tracking
-        $processed = [System.Threading.Interlocked]::Increment(([ref]$using:processed))
-        Write-Verbose "[$processed/$($using:Servers.Count)] Processing $serverName..."
+        Write-Verbose "Processing $serverName..."
         
         $result = [PSCustomObject]@{
             ServerName = $serverName
@@ -612,7 +609,7 @@ function Get-ServerStorageInventory {
     
     $results = @($storageResults)
     if ($results.Count -gt 0) {
-        $results | Export-Csv -Path (Join-Path $using:script:ServerOutputPath "Server_Storage_Details.csv") -NoTypeInformation
+        $results | Export-Csv -Path (Join-Path $script:ServerOutputPath "Server_Storage_Details.csv") -NoTypeInformation
         Write-Verbose "Collected $($results.Count) disk volumes from servers"
     }
     
@@ -686,17 +683,17 @@ function Get-ServerApplications {
     
     $results = @($appResults)
     if ($results.Count -gt 0) {
-        $results | Export-Csv -Path (Join-Path $using:script:ServerOutputPath "Server_Installed_Applications.csv") -NoTypeInformation
+        $results | Export-Csv -Path (Join-Path $script:ServerOutputPath "Server_Installed_Applications.csv") -NoTypeInformation
         Write-Verbose "Collected $($results.Count) application installations"
-        
+
         # Create application summary (aggregated)
         $summary = $results | Group-Object ApplicationName | Select-Object @{N='ApplicationName';E={$_.Name}},
             @{N='ServerCount';E={$_.Count}},
             @{N='MostCommonVersion';E={($_.Group | Group-Object Version | Sort-Object Count -Descending | Select-Object -First 1).Name}},
             @{N='Servers';E={($_.Group.ServerName | Sort-Object -Unique) -join '; '}}
-        
-        $summary | Sort-Object ServerCount -Descending | 
-            Export-Csv -Path (Join-Path $using:script:ServerOutputPath "Server_Application_Summary.csv") -NoTypeInformation
+
+        $summary | Sort-Object ServerCount -Descending |
+            Export-Csv -Path (Join-Path $script:ServerOutputPath "Server_Application_Summary.csv") -NoTypeInformation
     }
     
     return $results
@@ -750,7 +747,14 @@ function Get-ServerEventLogs {
                              @{N='Count';E={$_.Count}},
                              @{N='FirstOccurrence';E={($_.Group | Sort-Object TimeCreated | Select-Object -First 1).TimeCreated}},
                              @{N='LastOccurrence';E={($_.Group | Sort-Object TimeCreated -Descending | Select-Object -First 1).TimeCreated}},
-                             @{N='Message';E={($_.Group[0].Message -replace '[\r\n]+', ' ').Substring(0, [Math]::Min(500, ($_.Group[0].Message -replace '[\r\n]+', ' ').Length))}}
+                             @{N='Message';E={
+                                 $msg = $_.Group[0].Message
+                                 if ($msg) {
+                                     ($msg -replace '[\r\n]+', ' ').Substring(0, [Math]::Min(500, $msg.Length))
+                                 } else {
+                                     'No message'
+                                 }
+                             }}
             
             foreach ($event in $criticals) {
                 $criticalBag.Add($event)
@@ -772,7 +776,14 @@ function Get-ServerEventLogs {
                              @{N='Count';E={$_.Count}},
                              @{N='FirstOccurrence';E={($_.Group | Sort-Object TimeCreated | Select-Object -First 1).TimeCreated}},
                              @{N='LastOccurrence';E={($_.Group | Sort-Object TimeCreated -Descending | Select-Object -First 1).TimeCreated}},
-                             @{N='Message';E={($_.Group[0].Message -replace '[\r\n]+', ' ').Substring(0, [Math]::Min(500, ($_.Group[0].Message -replace '[\r\n]+', ' ').Length))}}
+                             @{N='Message';E={
+                                 $msg = $_.Group[0].Message
+                                 if ($msg) {
+                                     ($msg -replace '[\r\n]+', ' ').Substring(0, [Math]::Min(500, $msg.Length))
+                                 } else {
+                                     'No message'
+                                 }
+                             }}
             
             foreach ($event in $errors) {
                 $errorBag.Add($event)
@@ -788,13 +799,13 @@ function Get-ServerEventLogs {
     # Export results
     $criticalResults = @($criticalEvents) | Sort-Object Count -Descending
     if ($criticalResults.Count -gt 0) {
-        $criticalResults | Export-Csv -Path (Join-Path $using:script:ServerOutputPath "Server_Event_Log_Critical.csv") -NoTypeInformation
+        $criticalResults | Export-Csv -Path (Join-Path $script:ServerOutputPath "Server_Event_Log_Critical.csv") -NoTypeInformation
         Write-Verbose "Collected $($criticalResults.Count) unique critical event types"
     }
-    
+
     $errorResults = @($errorEvents) | Sort-Object Count -Descending
     if ($errorResults.Count -gt 0) {
-        $errorResults | Export-Csv -Path (Join-Path $using:script:ServerOutputPath "Server_Event_Log_Errors.csv") -NoTypeInformation
+        $errorResults | Export-Csv -Path (Join-Path $script:ServerOutputPath "Server_Event_Log_Errors.csv") -NoTypeInformation
         Write-Verbose "Collected $($errorResults.Count) unique error event types"
     }
     
@@ -922,13 +933,13 @@ function Get-ServerLogonHistory {
     # Export results
     $logonResults = @($logonResults) | Sort-Object LogonCount -Descending
     if ($logonResults.Count -gt 0) {
-        $logonResults | Export-Csv -Path (Join-Path $using:script:ServerOutputPath "Server_Logon_History.csv") -NoTypeInformation
+        $logonResults | Export-Csv -Path (Join-Path $script:ServerOutputPath "Server_Logon_History.csv") -NoTypeInformation
         Write-Verbose "Collected logon history for $($logonResults.Count) users"
     }
-    
+
     $failureResults = @($failureResults) | Sort-Object FailureCount -Descending
     if ($failureResults.Count -gt 0) {
-        $failureResults | Export-Csv -Path (Join-Path $using:script:ServerOutputPath "Server_Logon_Failures.csv") -NoTypeInformation
+        $failureResults | Export-Csv -Path (Join-Path $script:ServerOutputPath "Server_Logon_Failures.csv") -NoTypeInformation
         Write-Verbose "Collected $($failureResults.Count) users with failed logon attempts"
     }
     
