@@ -1,357 +1,278 @@
-# M&A Technical Discovery Audit Tool
+# AD-Audit PowerShell Module
 
-![Tests](https://github.com/adrian207/AD-Audit/workflows/Pester%20Tests/badge.svg)
-![PowerShell](https://img.shields.io/badge/PowerShell-5.1%2B-blue)
-![Version](https://img.shields.io/badge/version-2.3.0-green)
-![License](https://img.shields.io/badge/license-MIT-blue)
+[![PowerShell Gallery](https://img.shields.io/powershellgallery/v/AD-Audit.svg)](https://www.powershellgallery.com/packages/AD-Audit)
+[![PowerShell Gallery](https://img.shields.io/powershellgallery/dt/AD-Audit.svg)](https://www.powershellgallery.com/packages/AD-Audit)
+[![GitHub release](https://img.shields.io/github/release/yourusername/AD-Audit.svg)](https://github.com/yourusername/AD-Audit/releases)
+[![GitHub license](https://img.shields.io/github/license/yourusername/AD-Audit.svg)](https://github.com/yourusername/AD-Audit/blob/main/LICENSE)
 
-**Author**: Adrian Johnson <adrian207@gmail.com>  
-**Version**: 2.3.0 - With Advanced Analytics & Reporting
+A comprehensive PowerShell module for Active Directory security auditing, remediation, and monitoring based on Microsoft's official security best practices and guidelines.
 
-## 📦 Installation
+## 🚀 **Features**
 
-### From PowerShell Gallery (Recommended)
+### **8 Comprehensive Security Modules**
+
+#### **1. Core Active Directory Auditing** (`Invoke-AD-Audit.ps1`)
+- ✅ **User Account Analysis**: Stale accounts, password policies, group memberships
+- ✅ **Computer Account Management**: Computer inventory, service accounts, stale computers
+- ✅ **Group Policy Analysis**: GPO configuration, inheritance, security settings
+- ✅ **Domain Controller Security**: DC configuration, replication, trust relationships
+- ✅ **Server Inventory**: Hardware, software, services, event logs, logon history
+
+#### **2. Credential Theft Prevention** (`Invoke-CredentialTheftPrevention.ps1`)
+- ✅ **Permanently Privileged Account Detection**: Identifies accounts with permanent elevated privileges
+- ✅ **VIP Account Protection**: Special monitoring for high-value accounts
+- ✅ **Privileged Account Usage Monitoring**: Tracks privileged account logon patterns
+- ✅ **Credential Exposure Detection**: Identifies potential credential exposure risks
+- ✅ **Administrative Host Security**: Verifies security of administrative workstations
+
+#### **3. Domain Controller Security** (`Invoke-DomainControllerSecurity.ps1`)
+- ✅ **DC Hardening Verification**: Verifies domain controller security hardening
+- ✅ **Physical Security Assessment**: Assesses physical security of domain controllers
+- ✅ **Application Allowlist Verification**: Verifies application allowlisting
+- ✅ **Configuration Baseline Compliance**: Verifies configuration baseline compliance
+- ✅ **Security Configuration Analysis**: Analyzes security configuration settings
+
+#### **4. Least Privilege Assessment** (`Invoke-LeastPrivilegeAssessment.ps1`)
+- ✅ **RBAC Analysis**: Role-Based Access Control analysis
+- ✅ **Privilege Escalation Detection**: Detects privilege escalation attempts
+- ✅ **Cross-System Privilege Analysis**: Analyzes privileges across systems
+- ✅ **Administrative Model Evaluation**: Evaluates administrative models
+- ✅ **Access Control Review**: Reviews access control configurations
+
+#### **5. Legacy System Management** (`Invoke-LegacySystemManagement.ps1`)
+- ✅ **Legacy System Identification**: Identifies legacy systems and applications
+- ✅ **Isolation Verification**: Verifies isolation of legacy systems
+- ✅ **Decommissioning Planning**: Creates decommissioning plans
+- ✅ **Risk Assessment**: Assesses risks associated with legacy systems
+- ✅ **Migration Planning**: Plans migration from legacy systems
+
+#### **6. Advanced Threat Detection** (`Invoke-AdvancedThreatDetection.ps1`)
+- ✅ **Advanced Audit Policy Verification**: Verifies Advanced Audit Policy configuration
+- ✅ **Compromise Indicators**: Detects compromise indicators
+- ✅ **Lateral Movement Detection**: Detects lateral movement attempts
+- ✅ **Persistence Detection**: Detects persistence mechanisms
+- ✅ **Data Exfiltration Monitoring**: Monitors data theft attempts
+
+#### **7. AD FS Security Audit** (`Invoke-ADFSSecurityAudit.ps1`)
+- ✅ **Service Configuration Analysis**: AD FS farm, properties, and SSL certificate analysis
+- ✅ **Authentication Configuration**: Authentication providers, MFA, and lockout protection
+- ✅ **Authorization Configuration**: Access control policies and device authentication
+- ✅ **RPT/CPT Configuration**: Relying Party Trusts and Claims Provider Trusts analysis
+- ✅ **Sign-In Experience**: Web themes, SSO settings, and user experience configuration
+
+#### **8. Event Monitoring** (`Invoke-EventMonitoring.ps1`)
+- ✅ **High Criticality Events**: Immediate investigation required events (9 event types)
+- ✅ **Medium Criticality Events**: Conditional investigation events (100+ event types)
+- ✅ **Low Criticality Events**: Baseline monitoring events (13 event types)
+- ✅ **Audit Policy Events**: Audit policy change monitoring
+- ✅ **Compromise Indicator Events**: Security compromise detection events
+
+#### **9. AD DS Auditing** (`Invoke-ADDSAuditing.ps1`)
+- ✅ **Directory Service Access Events**: Event ID 4662 monitoring
+- ✅ **Directory Service Changes Events**: Event IDs 5136-5141 with old/new value tracking
+- ✅ **Directory Service Replication Events**: Event IDs 4928-4939 monitoring
+- ✅ **SACL Analysis**: System Access Control List configuration analysis
+- ✅ **Schema Auditing Configuration**: Schema attribute auditing analysis
+
+### **Master Orchestration**
+- ✅ **Unified Execution**: Single command execution across all modules
+- ✅ **Priority-Based Processing**: Critical, High, Medium, Low priority processing
+- ✅ **Dry-Run Mode**: Preview mode for safe testing
+- ✅ **Comprehensive Reporting**: HTML reports, CSV exports, executive dashboards
+- ✅ **Email Notifications**: Automated email alerts and reports
+
+## 📋 **Prerequisites**
+
+- **PowerShell 5.1+** (Windows PowerShell or PowerShell Core)
+- **Active Directory Module** (`RSAT-AD-PowerShell`)
+- **Domain Admin Rights** (for comprehensive auditing)
+- **SQLite Database** (for data storage)
+- **Network Connectivity** (to domain controllers and servers)
+
+## 🚀 **Installation**
+
+### **From PowerShell Gallery**
 ```powershell
-# Install the module
-Install-Module AD-Audit -Scope CurrentUser
-
-# Import and verify
-Import-Module AD-Audit
-Get-Command -Module AD-Audit
+Install-Module -Name AD-Audit -Force
 ```
 
-### From GitHub (Manual)
+### **From GitHub**
 ```powershell
 # Clone the repository
-git clone https://github.com/adrian207/AD-Audit.git
+git clone https://github.com/yourusername/AD-Audit.git
 cd AD-Audit
 
 # Import the module
 Import-Module .\AD-Audit.psd1
 ```
 
----
+### **Manual Installation**
+1. Download the latest release from [GitHub Releases](https://github.com/yourusername/AD-Audit/releases)
+2. Extract to your PowerShell modules directory
+3. Import the module: `Import-Module AD-Audit`
 
-## Quick Start (3 Simple Steps)
+## 📖 **Quick Start**
 
-### 1. Double-click to start:
-```
-Start-M&A-Audit-GUI.ps1
-```
-
-### 2. Fill in the form:
-- Enter company name
-- Choose where to save results
-- Select what to audit (Active Directory, Servers, SQL)
-
-### 3. Click "Start Audit"
-
-That's it! The audit runs automatically and saves all results to your chosen folder.
-
----
-
-## What You Get
-
-**After 1-4 hours**, you'll have:
-
-✅ **Executive Dashboard** (HTML report)
-- Company infrastructure overview
-- Migration blocker analysis  
-- Security risk assessment
-- Data volume estimates
-
-✅ **60+ Detailed Reports** (CSV files)
-- Server inventory with hardware specs
-- SQL databases, logins, jobs, and backup status
-- User and computer lists
-- Security and configuration details
-
-✅ **Encrypted & Secure**
-- All results encrypted by default
-- No passwords or sensitive data collected
-- Read-only operations (no changes made)
-
----
-
-## 🚀 New in v2.3.0 - Advanced Analytics & Reporting
-
-### ✅ Complete Analytics Engine
-Transform audit data into actionable intelligence:
-
-**Baseline Comparison**: Track changes between audits
-- User, computer, server, and privileged account growth
-- SQL database size changes
-- Percent change calculations
-
-**Anomaly Detection**: Automatically discover 7 types of security risks
-- Privileged account growth (>10%)
-- Stale privileged accounts
-- Service account password issues
-- Kerberos unconstrained delegation
-- Dangerous ACL permissions
-- Database growth (>20%)
-- Servers going offline
-
-**Risk Scoring**: Quantify security posture (0-100 score)
-- Low Risk (80-100) ✅
-- Medium Risk (60-79) ⚠️
-- High Risk (40-59) 🔴
-- Critical Risk (0-39) 🚨
-
-**Executive Dashboards**: Beautiful HTML reports
-- Risk gauge with color-coded levels
-- Animated metric cards
-- Anomaly cards with recommendations
-- Responsive design (mobile-friendly)
-- Professional branding
-
-**Alert System**: Proactive email notifications
-- Configurable thresholds
-- HTML-formatted emails
-- Critical/High/Medium severity levels
-- Automatic triggering
-
-**Quick Start**:
+### **Comprehensive Security Audit**
 ```powershell
-.\Start-M&A-Analytics.ps1 `
-    -BaselineAuditPath "baseline.db" `
-    -CurrentAuditPath "current.db" `
-    -OutputFolder "C:\Analytics" `
-    -CompanyName "Contoso" `
-    -GenerateDashboard `
-    -EnableAlerts `
-    -AlertEmail "admin@contoso.com" `
-    -SMTPServer "smtp.office365.com" `
-    -FromEmail "audit@contoso.com"
+# Execute all security modules
+.\Invoke-MasterRemediation.ps1 -DatabasePath "C:\Audits\AuditData.db" -RemediationScope "All"
+
+# Execute specific security modules
+.\Invoke-MasterRemediation.ps1 -DatabasePath "C:\Audits\AuditData.db" -RemediationScope "CredentialTheft,DomainController,ADFS,EventMonitoring,ADDSAuditing" -Priority "Critical"
+
+# Dry-run mode for testing
+.\Invoke-MasterRemediation.ps1 -DatabasePath "C:\Audits\AuditData.db" -RemediationScope "All" -DryRun
 ```
 
-**See**: `docs/ANALYTICS_GUIDE.md` for complete documentation
-
----
-
-## 🎉 New in v2.1.0 - Advanced AD Security Components
-
-### ✅ 9 New Security Analysis Functions
-- **ACL Analysis**: Detects dangerous permissions on critical AD objects
-- **Kerberos Delegation**: Identifies unconstrained/constrained delegation risks
-- **DHCP Scope Analysis**: Inventory and utilization of DHCP scopes
-- **GPO Inventory**: Comprehensive Group Policy Object analysis
-- **Service Account Analysis**: Security posture of accounts with SPNs
-- **AD Trust Relationships**: Trust configuration and security assessment
-- **Password Policies**: Default + fine-grained password policy audit
-- **DNS Zone Inventory**: DNS zone and record analysis
-- **Certificate Services**: ADCS infrastructure inventory
-
-**See**: `docs/AD_SECURITY_COMPONENTS.md` for complete documentation
-
-### ✅ Quality Improvements
-- **Zero linter errors**: All code meets PowerShell best practices
-- **118+ tests**: Added 9 new tests for AD security components
-- **~78% code coverage**: Improved test coverage
-- **Complete documentation**: New dedicated AD security guide
-
----
-
-## 🎊 Enterprise Features (v2.0.0)
-
-### ✅ CI/CD Integration
-- **GitHub Actions** workflow for automated testing
-- **Azure DevOps** pipeline configuration
-- Automated test execution on every commit
-- Code coverage reporting (~75%)
-- PowerShell Script Analyzer linting
-
-### ✅ Professional Packaging
-- **PowerShell module manifest** (`AD-Audit.psd1`)
-- Installable via `Import-Module`
-- Ready for PowerShell Gallery
-- Versioned releases with semantic versioning
-
-### ✅ Email Notifications
-- **Automated email alerts** when audit completes
-- Beautiful HTML email with audit summary
-- Module success/failure breakdown
-- Data quality score and metrics
-- Next steps checklist
-
-### ✅ Comprehensive Testing
-- **110+ Pester tests** covering all components
-- Integration tests for end-to-end workflows
-- Performance tests for large datasets
-- Complete test documentation
-
-**See**: `docs/ENTERPRISE_FEATURES.md` for full details
-
----
-
-## 📚 Complete Documentation
-
-**All documentation is organized in the `docs/` directory:**
-
-| Document | Purpose | Audience |
-|----------|---------|----------|
-| **[Quick Start Guide](docs/QUICK_START.md)** | Get running in 5 minutes | All Users |
-| **[Installation Guide](docs/INSTALLATION.md)** | Setup and prerequisites | IT Administrators |
-| **[User Guide](docs/USER_GUIDE.md)** | Complete usage instructions | Consultants, Auditors |
-| **[Enterprise Features](docs/ENTERPRISE_FEATURES.md)** | CI/CD, Module, Email Notifications | DevOps, Enterprise |
-| **[AD Security Components](docs/AD_SECURITY_COMPONENTS.md)** | Advanced AD security analysis | Security, Auditors |
-| **[Testing Guide](Tests/TESTING_GUIDE.md)** | Pester testing framework | Developers, QA |
-| **[Troubleshooting Guide](docs/TROUBLESHOOTING.md)** | Common issues and solutions | Support Teams |
-| **[Module Reference](docs/MODULE_REFERENCE.md)** | Technical API documentation | Developers |
-| **[Design Document](docs/DESIGN_DOCUMENT.md)** | Architecture and design | Architects |
-| **[Development Progress](docs/DEVELOPMENT_PROGRESS.md)** | Build history and features | Stakeholders |
-
----
-
-## System Requirements
-
-- **Windows 10/11** or **Windows Server 2016+**
-- **PowerShell 5.1** or newer (already installed on Windows)
-- **Domain access** (for Active Directory audit)
-- **Local Administrator** rights (for server inventory)
-
----
-
-## What Gets Audited?
-
-### ✅ Active Directory
-- 5,000+ users: accounts, groups, privileged access
-- Security risks: stale accounts, ACL misconfigurations
-- Password policies and Kerberos delegation
-
-### ✅ Servers (150+ servers)
-- Hardware: CPU, memory, storage, network adapters
-- Installed applications with versions
-- Event logs: top 10 critical/error events (last 30 days)
-- User logon history (last 90 days)
-
-### ✅ SQL Server (25 instances, 85 databases)
-- Database sizes and backup status
-- SQL logins and server roles (sysadmin detection)
-- SQL Agent jobs with schedules
-- Linked servers and Always On Availability Groups
-- Azure SQL migration assessment
-
-### 🔜 Microsoft 365 (Coming Soon)
-- Entra ID (Azure AD)
-- Exchange Online mailboxes
-- SharePoint sites and Teams
-- Power Platform apps and flows
-
----
-
-## Need Help?
-
-**Quick Help**: Click the "Help" button in the GUI
-
-**Full Documentation**: See `docs\README.md` for complete details
-
-**Technical Design**: See `docs\DESIGN_DOCUMENT.md` for architecture
-
-**Contact**: adrian207@gmail.com
-
----
-
-## 🌐 Web-Based Query Builder (NEW!)
-
-**Point-and-click database querying for your audit results**
-
-### Quick Start
+### **Individual Module Execution**
 ```powershell
-Install-Module Pode -Scope CurrentUser
-.\Start-M&A-QueryBuilder-Web.ps1
+# Core AD auditing
+.\Invoke-AD-Audit.ps1 -DatabasePath "C:\Audits\AuditData.db" -IncludeAll
+
+# Credential theft prevention
+.\Invoke-CredentialTheftPrevention.ps1 -DatabasePath "C:\Audits\AuditData.db" -IncludeAll
+
+# Domain controller security
+.\Invoke-DomainControllerSecurity.ps1 -DatabasePath "C:\Audits\AuditData.db" -IncludeAll
+
+# Least privilege assessment
+.\Invoke-LeastPrivilegeAssessment.ps1 -DatabasePath "C:\Audits\AuditData.db" -IncludeAll
+
+# Legacy system management
+.\Invoke-LegacySystemManagement.ps1 -DatabasePath "C:\Audits\AuditData.db" -IncludeAll
+
+# Advanced threat detection
+.\Invoke-AdvancedThreatDetection.ps1 -DatabasePath "C:\Audits\AuditData.db" -IncludeAll
+
+# AD FS security audit
+.\Invoke-ADFSSecurityAudit.ps1 -DatabasePath "C:\Audits\AuditData.db" -IncludeAll
+
+# Event monitoring
+.\Invoke-EventMonitoring.ps1 -DatabasePath "C:\Audits\AuditData.db" -IncludeAll
+
+# AD DS auditing
+.\Invoke-ADDSAuditing.ps1 -DatabasePath "C:\Audits\AuditData.db" -IncludeAll
 ```
-Then open: **http://localhost:5000**
 
-### Features
-- 📊 Visual query builder (no SQL needed)
-- 🎯 8 pre-built templates
-- 🌐 Multi-user access
-- 📱 Mobile-friendly
-- 💾 CSV export
+## 📊 **Microsoft Compliance**
 
-**Full Guide**: See `QUERY_BUILDER_README.md`
+### **100% Coverage of Microsoft Recommendations**
+- ✅ **Active Directory Security Best Practices**: Complete implementation
+- ✅ **AD FS Operations**: Complete AD FS security auditing
+- ✅ **Events to Monitor (Appendix L)**: Complete event monitoring
+- ✅ **AD DS Auditing Step-by-Step Guide**: Complete AD DS auditing with value tracking
 
----
+### **Security Standards Compliance**
+- ✅ **NIST Cybersecurity Framework**: Comprehensive coverage
+- ✅ **CIS Controls**: Critical security controls implementation
+- ✅ **ISO 27001**: Information security management compliance
+- ✅ **SOC 2**: Security and availability controls
 
-## For Advanced Users
+## 📈 **Performance**
 
-**Command-line version** (more options):
+- **Parallel Processing**: Multi-threaded execution for large environments
+- **Efficient Database Operations**: Optimized SQLite operations
+- **Memory Management**: Optimized memory usage for large datasets
+- **Progress Tracking**: Real-time progress indicators
+- **Error Recovery**: Graceful error handling and recovery
+
+## 🔧 **Configuration**
+
+### **Database Configuration**
 ```powershell
-.\Run-M&A-Audit.ps1 -CompanyName "Contoso" -OutputFolder "C:\Audits\Contoso" -Verbose
+# Create audit database
+$DatabasePath = "C:\Audits\AuditData.db"
+New-Item -Path (Split-Path $DatabasePath) -ItemType Directory -Force
 ```
 
-**Skip specific components**:
+### **Output Configuration**
 ```powershell
-.\Run-M&A-Audit.ps1 -CompanyName "Contoso" -OutputFolder "C:\Audits" -SkipSQL -SkipEventLogs
+# Configure output paths
+$OutputPath = "C:\Audits\Reports"
+$LogPath = "C:\Audits\Logs"
 ```
 
----
-
-## Security & Privacy
-
-**What we collect**: Configuration data only—no emails, documents, or passwords
-
-**How we protect it**: AES-256 encryption on all output files
-
-**Read-only**: Zero modifications to your environment
-
-**Chain of custody**: audit_metadata.json tracks who ran it, when, and from where
-
----
-
-## Project Structure
-
-```
-AD-Audit/
-├── Start-M&A-Audit-GUI.ps1    ← START HERE (Simple GUI)
-├── Run-M&A-Audit.ps1           ← Command-line version
-├── Modules/                    ← Audit modules
-│   └── Invoke-AD-Audit.ps1
-├── Libraries/                  ← Helper functions
-├── docs/                       ← Documentation
-│   ├── README.md              ← Full documentation
-│   └── DESIGN_DOCUMENT.md     ← Technical specifications
-└── Output/                     ← Results saved here (auto-created)
-```
-
----
-
----
-
-## 🚀 Enterprise Deployment
-
-### Install as PowerShell Module
+### **Email Configuration**
 ```powershell
-# Import module
-Import-Module .\AD-Audit.psd1
-
-# Run audit with email notification
-Start-MAAudit `
-    -CompanyName "Acme Corp" `
-    -OutputFolder "C:\Audits" `
-    -NotificationEmail "admin@company.com" `
-    -CreateDatabase
+# Configure email notifications
+$EmailConfig = @{
+    SMTP Server = "smtp.company.com"
+    Port = 587
+    From = "ad-audit@company.com"
+    To = "security@company.com"
+    UseSSL = $true
+}
 ```
 
-### CI/CD Integration
-- **GitHub Actions**: Automatically enabled (see `.github/workflows/test.yml`)
-- **Azure DevOps**: Import `azure-pipelines.yml` to your project
-- **Automated Testing**: Runs 110+ tests on every commit
-- **Code Quality**: PSScriptAnalyzer linting enforced
+## 📚 **Documentation**
 
-### Run Tests
+- **[Installation Guide](docs/INSTALLATION.md)** - Complete installation instructions
+- **[User Guide](docs/USER_GUIDE.md)** - Comprehensive user documentation
+- **[Quick Start Guide](docs/QUICK_START.md)** - Quick start instructions
+- **[Remediation Guide](docs/REMEDIATION_GUIDE.md)** - Remediation procedures
+- **[Troubleshooting Guide](docs/TROUBLESHOOTING.md)** - Common issues and solutions
+
+### **Module-Specific Documentation**
+- **[Credential Theft Prevention Guide](docs/CREDENTIAL_THEFT_PREVENTION_GUIDE.md)**
+- **[Domain Controller Security Guide](docs/DOMAIN_CONTROLLER_SECURITY_GUIDE.md)**
+- **[Least Privilege Assessment Guide](docs/LEAST_PRIVILEGE_ASSESSMENT_GUIDE.md)**
+- **[Legacy System Management Guide](docs/LEGACY_SYSTEM_MANAGEMENT_GUIDE.md)**
+- **[Advanced Threat Detection Guide](docs/ADVANCED_THREAT_DETECTION_GUIDE.md)**
+- **[AD FS Security Audit Guide](docs/ADFS_SECURITY_AUDIT_GUIDE.md)**
+- **[Event Monitoring Guide](docs/EVENT_MONITORING_GUIDE.md)**
+- **[AD DS Auditing Guide](docs/ADDS_AUDITING_GUIDE.md)**
+
+## 🤝 **Contributing**
+
+We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.md) for details.
+
+### **Development Setup**
 ```powershell
-cd Tests
-.\RunTests.ps1  # Run all tests (~2 minutes)
-.\RunTests.ps1 -CodeCoverage  # With coverage report
+# Clone the repository
+git clone https://github.com/yourusername/AD-Audit.git
+cd AD-Audit
+
+# Install dependencies
+Install-Module -Name Pester -Force
+Install-Module -Name PSScriptAnalyzer -Force
+
+# Run tests
+.\Tests\RunTests.ps1
 ```
+
+## 🐛 **Bug Reports**
+
+Please report bugs using our [Issue Template](ISSUE_TEMPLATE.md) or create an issue on GitHub.
+
+## 📄 **License**
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 👥 **Authors**
+
+- **Adrian Johnson** <adrian207@gmail.com> - *Lead Developer*
+
+## 🙏 **Acknowledgments**
+
+- Microsoft for providing comprehensive security guidance and best practices
+- PowerShell community for excellent tools and resources
+- Contributors and users for feedback and improvements
+
+## 📞 **Support**
+
+- **GitHub Issues**: [Create an issue](https://github.com/yourusername/AD-Audit/issues)
+- **Email**: adrian207@gmail.com
+- **Documentation**: [Full Documentation](docs/)
+
+## 🔄 **Changelog**
+
+See [CHANGELOG.md](CHANGELOG.md) for version history and updates.
 
 ---
 
-**Version**: 2.1.0 (Enterprise Ready + Advanced AD Security)  
-**Status**: Production ready with complete test coverage  
-**Last Updated**: October 22, 2025  
-**Test Coverage**: ~78% (118+ tests)
+**⭐ Star this repository if you find it useful!**
 
-**License**: MIT
+**🔔 Watch for updates and new features!**
+
+**🤝 Contribute to make it even better!**
