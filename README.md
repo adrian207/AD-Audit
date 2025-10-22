@@ -2,11 +2,11 @@
 
 ![Tests](https://github.com/adrian207/AD-Audit/workflows/Pester%20Tests/badge.svg)
 ![PowerShell](https://img.shields.io/badge/PowerShell-5.1%2B-blue)
-![Version](https://img.shields.io/badge/version-2.0.0-green)
+![Version](https://img.shields.io/badge/version-2.1.0-green)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 
 **Author**: Adrian Johnson <adrian207@gmail.com>  
-**Version**: 2.0.0 - Enterprise Ready
+**Version**: 2.1.0 - Enterprise Ready + Advanced AD Security
 
 ## Quick Start (3 Simple Steps)
 
@@ -49,7 +49,30 @@ That's it! The audit runs automatically and saves all results to your chosen fol
 
 ---
 
-## 🎉 New in v2.0.0 - Enterprise Features
+## 🎉 New in v2.1.0 - Advanced AD Security Components
+
+### ✅ 9 New Security Analysis Functions
+- **ACL Analysis**: Detects dangerous permissions on critical AD objects
+- **Kerberos Delegation**: Identifies unconstrained/constrained delegation risks
+- **DHCP Scope Analysis**: Inventory and utilization of DHCP scopes
+- **GPO Inventory**: Comprehensive Group Policy Object analysis
+- **Service Account Analysis**: Security posture of accounts with SPNs
+- **AD Trust Relationships**: Trust configuration and security assessment
+- **Password Policies**: Default + fine-grained password policy audit
+- **DNS Zone Inventory**: DNS zone and record analysis
+- **Certificate Services**: ADCS infrastructure inventory
+
+**See**: `docs/AD_SECURITY_COMPONENTS.md` for complete documentation
+
+### ✅ Quality Improvements
+- **Zero linter errors**: All code meets PowerShell best practices
+- **118+ tests**: Added 9 new tests for AD security components
+- **~78% code coverage**: Improved test coverage
+- **Complete documentation**: New dedicated AD security guide
+
+---
+
+## 🎊 Enterprise Features (v2.0.0)
 
 ### ✅ CI/CD Integration
 - **GitHub Actions** workflow for automated testing
@@ -91,6 +114,7 @@ That's it! The audit runs automatically and saves all results to your chosen fol
 | **[Installation Guide](docs/INSTALLATION.md)** | Setup and prerequisites | IT Administrators |
 | **[User Guide](docs/USER_GUIDE.md)** | Complete usage instructions | Consultants, Auditors |
 | **[Enterprise Features](docs/ENTERPRISE_FEATURES.md)** | CI/CD, Module, Email Notifications | DevOps, Enterprise |
+| **[AD Security Components](docs/AD_SECURITY_COMPONENTS.md)** | Advanced AD security analysis | Security, Auditors |
 | **[Testing Guide](Tests/TESTING_GUIDE.md)** | Pester testing framework | Developers, QA |
 | **[Troubleshooting Guide](docs/TROUBLESHOOTING.md)** | Common issues and solutions | Support Teams |
 | **[Module Reference](docs/MODULE_REFERENCE.md)** | Technical API documentation | Developers |
@@ -245,9 +269,9 @@ cd Tests
 
 ---
 
-**Version**: 2.0.0 (Enterprise Ready)  
+**Version**: 2.1.0 (Enterprise Ready + Advanced AD Security)  
 **Status**: Production ready with complete test coverage  
 **Last Updated**: October 22, 2025  
-**Test Coverage**: ~75% (110+ tests)
+**Test Coverage**: ~78% (118+ tests)
 
 **License**: MIT
