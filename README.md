@@ -8,6 +8,30 @@
 **Author**: Adrian Johnson <adrian207@gmail.com>  
 **Version**: 2.3.0 - With Advanced Analytics & Reporting
 
+## 📦 Installation
+
+### From PowerShell Gallery (Recommended)
+```powershell
+# Install the module
+Install-Module AD-Audit -Scope CurrentUser
+
+# Import and verify
+Import-Module AD-Audit
+Get-Command -Module AD-Audit
+```
+
+### From GitHub (Manual)
+```powershell
+# Clone the repository
+git clone https://github.com/adrian207/AD-Audit.git
+cd AD-Audit
+
+# Import the module
+Import-Module .\AD-Audit.psd1
+```
+
+---
+
 ## Quick Start (3 Simple Steps)
 
 ### 1. Double-click to start:
