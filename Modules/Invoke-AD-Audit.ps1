@@ -481,7 +481,7 @@ function Get-PrivilegedAccounts {
                 }
             }
             catch {
-                Write-ModuleLog "Failed to query group $groupName: $_" -Level Warning
+                Write-ModuleLog "Failed to query group ${groupName}: $_" -Level Warning
             }
         }
         
@@ -705,7 +705,7 @@ function Get-ServerStorageInventory {
                 $disks = Get-CimInstance -CimSession $cimSession -ClassName Win32_LogicalDisk -Filter "DriveType=3" -ErrorAction Stop
                 
                 foreach ($disk in $disks) {
-                    $storageResults.Add([PSCustomObject]@{
+                    $resultBag.Add([PSCustomObject]@{
                         ServerName = $serverName
                         DriveLetter = $disk.DeviceID
                         VolumeName = $disk.VolumeName
@@ -722,7 +722,7 @@ function Get-ServerStorageInventory {
             }
         }
         catch {
-            Write-Verbose "Failed to collect storage from $serverName: $_"
+            Write-Verbose "Failed to collect storage from ${serverName}: $_"
         }
     }
     
@@ -775,7 +775,9 @@ function Get-ServerApplications {
                             Select-Object DisplayName, DisplayVersion, Publisher, InstallDate, InstallLocation, EstimatedSize
                         $apps += $items
                     }
-                    catch {}
+                    catch {
+                        # Silently continue if registry path doesn't exist or is inaccessible
+                    }
                 }
                 
                 return $apps
@@ -814,7 +816,7 @@ function Get-ServerApplications {
             }
         }
         catch {
-            Write-Verbose "Failed to collect applications from $serverName: $_"
+            Write-Verbose "Failed to collect applications from ${serverName}: $_"
         }
     }
     
@@ -964,7 +966,7 @@ function Get-ServerEventLogs {
             Write-Verbose "Collected event logs from $serverName"
         }
         catch {
-            Write-Verbose "Failed to collect event logs from $serverName: $_"
+            Write-Verbose "Failed to collect event logs from ${serverName}: $_"
         }
     }
     
@@ -1131,7 +1133,7 @@ function Get-ServerLogonHistory {
             Write-Verbose "Collected logon history from $serverName"
         }
         catch {
-            Write-Verbose "Failed to collect logon history from $serverName: $_"
+            Write-Verbose "Failed to collect logon history from ${serverName}: $_"
         }
     }
     
@@ -1206,10 +1208,10 @@ try {
         }
         else {
             # Step 2: Storage inventory
-            $storage = Get-ServerStorageInventory -Servers $onlineServers -MaxParallel $MaxParallelServers
-            
+            $null = Get-ServerStorageInventory -Servers $onlineServers -MaxParallel $MaxParallelServers
+
             # Step 3: Installed applications
-            $applications = Get-ServerApplications -Servers $onlineServers -MaxParallel $MaxParallelServers
+            $null = Get-ServerApplications -Servers $onlineServers -MaxParallel $MaxParallelServers
             
             # Step 4: Event logs (if not skipped)
             if (-not $SkipEventLogs) {
