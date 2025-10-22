@@ -579,3 +579,290 @@ Describe "Get-ServerHardwareInventory" {
     }
 }
 
+Describe "Advanced AD Security Components" -Tag "Unit", "ADSecurity" {
+    BeforeAll {
+        . "$PSScriptRoot/../Modules/Invoke-AD-Audit.ps1"
+    }
+    
+    It "Get-ACLAnalysis should analyze AD ACLs" {
+        Mock Get-ADDomain {
+            return [PSCustomObject]@{ DistinguishedName = 'DC=test,DC=local' }
+        }
+        
+        Mock Get-Acl {
+            return [PSCustomObject]@{
+                Access = @(
+                    [PSCustomObject]@{
+                        IdentityReference = 'BUILTIN\Administrators'
+                        ActiveDirectoryRights = 'GenericAll'
+                        AccessControlType = 'Allow'
+                        IsInherited = $true
+                    }
+                )
+            }
+        }
+        
+        Mock Export-Csv { }
+        Mock Write-ModuleLog { }
+        
+        { Get-ACLAnalysis } | Should -Not -Throw
+    }
+    
+    It "Get-KerberosDelegation should detect delegation configurations" {
+        Mock Get-ADComputer {
+            return @(
+                [PSCustomObject]@{
+                    Name = 'SERVER01'
+                    SAMAccountName = 'SERVER01$'
+                    TrustedForDelegation = $true
+                    ServicePrincipalName = @('HTTP/server01')
+                    OperatingSystem = 'Windows Server 2019'
+                    DistinguishedName = 'CN=SERVER01,OU=Servers,DC=test,DC=local'
+                    PrimaryGroupID = 515
+                }
+            )
+        }
+        
+        Mock Get-ADUser {
+            return @()
+        }
+        
+        Mock Export-Csv { }
+        Mock Write-ModuleLog { }
+        
+        $result = Get-KerberosDelegation
+        $result | Should -Not -BeNullOrEmpty
+        $result[0].DelegationType | Should -Be 'Unconstrained'
+        $result[0].Severity | Should -Be 'Critical'
+    }
+    
+    It "Get-DHCPScopeAnalysis should analyze DHCP scopes" {
+        Mock Get-DhcpServerInDC {
+            return @(
+                [PSCustomObject]@{
+                    DnsName = 'dhcp01.test.local'
+                    IPAddress = '10.0.0.10'
+                }
+            )
+        }
+        
+        Mock Get-DhcpServerv4Scope {
+            return @(
+                [PSCustomObject]@{
+                    ScopeId = '10.0.1.0'
+                    Name = 'Office Network'
+                    SubnetMask = '255.255.255.0'
+                    StartRange = '10.0.1.10'
+                    EndRange = '10.0.1.250'
+                    LeaseDuration = '8.00:00:00'
+                    State = 'Active'
+                }
+            )
+        }
+        
+        Mock Get-DhcpServerv4ScopeStatistics {
+            return [PSCustomObject]@{
+                AddressesInUse = 100
+                AddressesFree = 140
+                PercentageInUse = 42
+            }
+        }
+        
+        Mock Get-DhcpServerv4Lease {
+            return @()
+        }
+        
+        Mock Export-Csv { }
+        Mock Write-ModuleLog { }
+        
+        $result = Get-DHCPScopeAnalysis
+        $result.Scopes.Count | Should -BeGreaterThan 0
+        $result.Scopes[0].ScopeName | Should -Be 'Office Network'
+    }
+    
+    It "Get-GPOInventory should collect GPOs" {
+        Mock Import-Module { }
+        
+        Mock Get-GPO {
+            return @(
+                [PSCustomObject]@{
+                    DisplayName = 'Default Domain Policy'
+                    Id = [guid]::NewGuid()
+                    GpoStatus = 'AllSettingsEnabled'
+                    CreationTime = (Get-Date).AddYears(-5)
+                    ModificationTime = (Get-Date).AddDays(-30)
+                    User = [PSCustomObject]@{ DSVersion = 2 }
+                    Computer = [PSCustomObject]@{ DSVersion = 5 }
+                    WmiFilter = $null
+                    GpoLinks = @()
+                    Owner = 'BUILTIN\Domain Admins'
+                }
+            )
+        }
+        
+        Mock Export-Csv { }
+        Mock Write-ModuleLog { }
+        
+        $result = Get-GPOInventory
+        $result | Should -Not -BeNullOrEmpty
+        $result[0].DisplayName | Should -Be 'Default Domain Policy'
+    }
+    
+    It "Get-ServiceAccounts should identify service accounts" {
+        Mock Get-ADUser {
+            return @(
+                [PSCustomObject]@{
+                    Name = 'svc_sql'
+                    SAMAccountName = 'svc_sql'
+                    Enabled = $true
+                    ServicePrincipalName = @('MSSQLSvc/server01:1433')
+                    PasswordLastSet = (Get-Date).AddDays(-200)
+                    PasswordNeverExpires = $true
+                    LastLogonDate = (Get-Date).AddHours(-2)
+                    AdminCount = 0
+                    DistinguishedName = 'CN=svc_sql,OU=ServiceAccounts,DC=test,DC=local'
+                }
+            )
+        }
+        
+        Mock Export-Csv { }
+        Mock Write-ModuleLog { }
+        
+        $result = Get-ServiceAccounts
+        $result | Should -Not -BeNullOrEmpty
+        $result[0].SAMAccountName | Should -Be 'svc_sql'
+        $result[0].SecurityRisk | Should -Be 'High'
+    }
+    
+    It "Get-ADTrustRelationships should analyze trusts" {
+        Mock Get-ADTrust {
+            return @(
+                [PSCustomObject]@{
+                    Name = 'partner.local'
+                    Direction = 'Bidirectional'
+                    TrustType = 'External'
+                    TrustAttributes = 'ForestTransitive'
+                    Source = 'test.local'
+                    Target = 'partner.local'
+                    ForestTransitive = $true
+                    SelectiveAuthenticationEnabled = $false
+                    SIDFilteringQuarantined = $true
+                    Created = (Get-Date).AddYears(-2)
+                    Modified = (Get-Date).AddMonths(-6)
+                }
+            )
+        }
+        
+        Mock Export-Csv { }
+        Mock Write-ModuleLog { }
+        
+        $result = Get-ADTrustRelationships
+        $result | Should -Not -BeNullOrEmpty
+        $result[0].Name | Should -Be 'partner.local'
+        $result[0].SecurityLevel | Should -Be 'Review Required'
+    }
+    
+    It "Get-PasswordPolicies should analyze password policies" {
+        Mock Get-ADDefaultDomainPasswordPolicy {
+            return [PSCustomObject]@{
+                ComplexityEnabled = $true
+                LockoutDuration = '00:30:00'
+                LockoutObservationWindow = '00:30:00'
+                LockoutThreshold = 5
+                MaxPasswordAge = '42.00:00:00'
+                MinPasswordAge = '1.00:00:00'
+                MinPasswordLength = 14
+                PasswordHistoryCount = 24
+                ReversibleEncryptionEnabled = $false
+            }
+        }
+        
+        Mock Get-ADFineGrainedPasswordPolicy {
+            return @()
+        }
+        
+        Mock Export-Csv { }
+        Mock Write-ModuleLog { }
+        
+        $result = Get-PasswordPolicies
+        $result.DefaultPolicy | Should -Not -BeNullOrEmpty
+        $result.DefaultPolicy.MinPasswordLength | Should -Be 14
+        $result.DefaultPolicy.SecurityAssessment | Should -Be 'Adequate'
+    }
+    
+    It "Get-DNSZoneInventory should analyze DNS zones" {
+        Mock Get-ADDomain {
+            return [PSCustomObject]@{
+                PDCEmulator = 'DC01.test.local'
+            }
+        }
+        
+        Mock Get-DnsServerZone {
+            return @(
+                [PSCustomObject]@{
+                    ZoneName = 'test.local'
+                    ZoneType = 'Primary'
+                    DynamicUpdate = 'Secure'
+                    IsAutoCreated = $false
+                    IsDsIntegrated = $true
+                    IsReverseLookupZone = $false
+                    IsSigned = $false
+                    SecureSecondaries = 'NoTransfer'
+                }
+            )
+        }
+        
+        Mock Get-DnsServerResourceRecord {
+            return @()
+        }
+        
+        Mock Export-Csv { }
+        Mock Write-ModuleLog { }
+        
+        $result = Get-DNSZoneInventory
+        $result.Zones | Should -Not -BeNullOrEmpty
+        $result.Zones[0].ZoneName | Should -Be 'test.local'
+    }
+    
+    It "Get-CertificateServices should audit certificate services" {
+        Mock Get-ADRootDSE {
+            return [PSCustomObject]@{
+                configurationNamingContext = 'CN=Configuration,DC=test,DC=local'
+            }
+        }
+        
+        Mock Get-ADObject {
+            param($Filter, $SearchBase, $Properties)
+            if ($Filter.ToString() -match 'pKIEnrollmentService') {
+                return @(
+                    [PSCustomObject]@{
+                        Name = 'TEST-CA'
+                        displayName = 'Test Certificate Authority'
+                        dNSHostName = 'ca01.test.local'
+                        cACertificate = 'Present'
+                        DistinguishedName = 'CN=TEST-CA,CN=Enrollment Services,CN=Public Key Services,CN=Services,CN=Configuration,DC=test,DC=local'
+                    }
+                )
+            }
+            elseif ($Filter.ToString() -match 'pKICertificateTemplate') {
+                return @(
+                    [PSCustomObject]@{
+                        Name = 'User'
+                        displayName = 'User Certificate'
+                        Created = (Get-Date).AddYears(-3)
+                        Modified = (Get-Date).AddMonths(-6)
+                        DistinguishedName = 'CN=User,CN=Certificate Templates,CN=Public Key Services,CN=Services,CN=Configuration,DC=test,DC=local'
+                    }
+                )
+            }
+        }
+        
+        Mock Export-Csv { }
+        Mock Write-ModuleLog { }
+        
+        $result = Get-CertificateServices
+        $result.CertificationAuthorities | Should -Not -BeNullOrEmpty
+        $result.CertificationAuthorities[0].Name | Should -Be 'TEST-CA'
+    }
+}
+
