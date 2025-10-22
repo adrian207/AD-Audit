@@ -498,12 +498,548 @@ WHERE Department IS NOT NULL AND Department != ''
 GROUP BY Department
 ORDER BY UserCount DESC
 "@
+            },
+            @{
+                name = "Kerberos Delegation Risks"
+                description = "Accounts with unconstrained Kerberos delegation (CRITICAL)"
+                category = "Security"
+                query = @"
+SELECT 
+    Name,
+    ObjectType,
+    DelegationType,
+    Severity,
+    ServicePrincipalNames,
+    Recommendation
+FROM AD_Kerberos_Delegation
+WHERE Severity = 'Critical'
+ORDER BY Name
+"@
+            },
+            @{
+                name = "Dangerous ACL Permissions"
+                description = "AD objects with risky permission assignments"
+                category = "Security"
+                query = @"
+SELECT 
+    Path,
+    Identity,
+    Rights,
+    Severity,
+    Reason
+FROM AD_ACL_Issues
+WHERE Severity IN ('Critical', 'High')
+ORDER BY Severity, Path
+"@
+            },
+            @{
+                name = "Service Account Security Review"
+                description = "Service accounts with password issues"
+                category = "Security"
+                query = @"
+SELECT 
+    Name,
+    SAMAccountName,
+    PasswordAgeDays,
+    PasswordNeverExpires,
+    LastLogon,
+    SecurityRisk,
+    IsPrivileged
+FROM AD_Service_Accounts
+WHERE SecurityRisk IN ('High', 'Medium')
+ORDER BY SecurityRisk DESC, PasswordAgeDays DESC
+"@
+            },
+            @{
+                name = "Password Policy Analysis"
+                description = "Review password policy strength"
+                category = "Security"
+                query = @"
+SELECT 
+    PolicyType,
+    MinPasswordLength,
+    ComplexityEnabled,
+    MaxPasswordAge,
+    LockoutThreshold,
+    SecurityAssessment
+FROM AD_Password_Policy_Default
+UNION ALL
+SELECT 
+    'Fine-Grained: ' || Name AS PolicyType,
+    MinPasswordLength,
+    ComplexityEnabled,
+    MaxPasswordAge,
+    LockoutThreshold,
+    'Custom' AS SecurityAssessment
+FROM AD_Password_Policies_FineGrained
+"@
+            },
+            @{
+                name = "AD Trust Relationships"
+                description = "All trust relationships with security assessment"
+                category = "Active Directory"
+                query = @"
+SELECT 
+    Name,
+    Direction,
+    TrustType,
+    SecurityLevel,
+    SelectiveAuthentication,
+    SIDFilteringEnabled,
+    ForestTransitive
+FROM AD_Trusts
+ORDER BY SecurityLevel DESC, Name
+"@
+            },
+            @{
+                name = "DHCP Scope Utilization"
+                description = "DHCP scopes with high utilization"
+                category = "Network"
+                query = @"
+SELECT 
+    ServerName,
+    ScopeName,
+    ScopeId,
+    AddressesInUse,
+    AddressesFree,
+    PercentageInUse,
+    TotalAddresses,
+    State
+FROM AD_DHCP_Scopes
+WHERE PercentageInUse > 80
+ORDER BY PercentageInUse DESC
+"@
+            },
+            @{
+                name = "GPO Inventory Overview"
+                description = "All Group Policy Objects with modification dates"
+                category = "Active Directory"
+                query = @"
+SELECT 
+    DisplayName,
+    GpoStatus,
+    ModificationTime,
+    LinksCount,
+    Owner,
+    WmiFilterName
+FROM AD_GPO_Inventory
+ORDER BY ModificationTime DESC
+"@
+            },
+            @{
+                name = "DNS Zone Configuration"
+                description = "DNS zones and their security settings"
+                category = "Network"
+                query = @"
+SELECT 
+    ZoneName,
+    ZoneType,
+    DynamicUpdate,
+    IsDsIntegrated,
+    IsSigned,
+    IsReverseLookupZone
+FROM AD_DNS_Zones
+WHERE NOT IsAutoCreated
+ORDER BY ZoneName
+"@
+            },
+            @{
+                name = "Certificate Authority Inventory"
+                description = "Active Directory Certificate Services infrastructure"
+                category = "Security"
+                query = @"
+SELECT 
+    Name,
+    DisplayName,
+    DNSHostName,
+    CACertificate
+FROM AD_Certificate_Authorities
+ORDER BY Name
+"@
+            },
+            @{
+                name = "High-Value Admin Accounts"
+                description = "All privileged accounts across multiple groups"
+                category = "Security"
+                query = @"
+SELECT 
+    MemberSamAccountName,
+    MemberDistinguishedName,
+    COUNT(DISTINCT GroupName) AS AdminGroupCount,
+    GROUP_CONCAT(DISTINCT GroupName, ', ') AS Groups
+FROM PrivilegedAccounts
+GROUP BY MemberSamAccountName, MemberDistinguishedName
+HAVING AdminGroupCount > 1
+ORDER BY AdminGroupCount DESC
+"@
+            },
+            @{
+                name = "Servers by Operating System"
+                description = "Server OS distribution and patch level"
+                category = "Servers"
+                query = @"
+SELECT 
+    OperatingSystem,
+    COUNT(*) AS ServerCount,
+    SUM(CASE WHEN IsVirtual = 1 THEN 1 ELSE 0 END) AS VirtualCount,
+    AVG(MemoryGB) AS AvgMemoryGB,
+    AVG(CPUCores) AS AvgCPUCores
+FROM Servers
+WHERE Online = 1
+GROUP BY OperatingSystem
+ORDER BY ServerCount DESC
+"@
+            },
+            @{
+                name = "SQL Server Security Review"
+                description = "SQL instances with potential security issues"
+                category = "SQL"
+                query = @"
+SELECT 
+    s.ServerName,
+    s.InstanceName,
+    s.ProductVersion,
+    s.Edition,
+    d.DatabaseName,
+    d.RecoveryModel,
+    d.DaysSinceLastBackup,
+    d.BackupIssue
+FROM SQLInstances s
+INNER JOIN SQLDatabases d ON s.ServerName = d.ServerName
+WHERE d.BackupIssue IS NOT NULL OR d.RecoveryModel = 'SIMPLE'
+ORDER BY d.DaysSinceLastBackup DESC
+"@
+            },
+            @{
+                name = "Large Databases for Migration Planning"
+                description = "Largest databases requiring migration"
+                category = "SQL"
+                query = @"
+SELECT 
+    ServerName,
+    DatabaseName,
+    SizeGB,
+    RecoveryModel,
+    DaysSinceLastBackup,
+    LastBackupDate
+FROM SQLDatabases
+WHERE SizeGB > 50
+ORDER BY SizeGB DESC
+LIMIT 20
+"@
+            },
+            @{
+                name = "Server Event Log Critical Issues"
+                description = "Critical events from server event logs"
+                category = "Servers"
+                query = @"
+SELECT 
+    ServerName,
+    EventID,
+    Source,
+    LogName,
+    Count,
+    FirstOccurrence,
+    LastOccurrence
+FROM Server_EventLogs_Critical
+WHERE Count > 10
+ORDER BY Count DESC, LastOccurrence DESC
+"@
+            },
+            @{
+                name = "Server Storage Capacity Analysis"
+                description = "Servers with low disk space"
+                category = "Servers"
+                query = @"
+SELECT 
+    ServerName,
+    DriveLetter,
+    VolumeName,
+    SizeGB,
+    FreeSpaceGB,
+    PercentFree,
+    FileSystem
+FROM Server_Storage_Details
+WHERE PercentFree < 20
+ORDER BY PercentFree ASC, SizeGB DESC
+"@
+            },
+            @{
+                name = "Server Logon History - Recent Activity"
+                description = "Recent logon patterns by server"
+                category = "Servers"
+                query = @"
+SELECT 
+    ServerName,
+    UserName,
+    LogonCount,
+    FirstLogon,
+    LastLogon,
+    LogonType
+FROM Server_Logon_History
+WHERE DATE(LastLogon) >= DATE('now', '-30 days')
+ORDER BY LogonCount DESC
+LIMIT 50
+"@
+            },
+            @{
+                name = "Application Deployment Coverage"
+                description = "Applications installed on 10+ servers"
+                category = "Servers"
+                query = @"
+SELECT 
+    ApplicationName,
+    Publisher,
+    COUNT(DISTINCT ServerName) AS DeployedCount,
+    AVG(SizeMB) AS AvgSizeMB
+FROM Server_Installed_Applications
+GROUP BY ApplicationName, Publisher
+HAVING DeployedCount >= 10
+ORDER BY DeployedCount DESC
+"@
+            },
+            @{
+                name = "Orphaned Group Memberships"
+                description = "Users in groups but no longer enabled"
+                category = "Active Directory"
+                query = @"
+SELECT 
+    pa.MemberSamAccountName,
+    pa.GroupName,
+    u.Enabled,
+    u.DaysSinceLastLogon,
+    u.LastLogonDate
+FROM PrivilegedAccounts pa
+LEFT JOIN Users u ON pa.MemberSamAccountName = u.SamAccountName
+WHERE u.Enabled = 0 OR u.DaysSinceLastLogon > 180
+ORDER BY pa.GroupName, u.DaysSinceLastLogon DESC
+"@
+            },
+            @{
+                name = "SQL Database Growth Trends"
+                description = "Databases and their size for capacity planning"
+                category = "SQL"
+                query = @"
+SELECT 
+    d.ServerName,
+    d.DatabaseName,
+    d.SizeGB,
+    d.RecoveryModel,
+    s.MemoryGB AS ServerMemoryGB,
+    ROUND(d.SizeGB * 100.0 / SUM(d.SizeGB) OVER (PARTITION BY d.ServerName), 2) AS PercentOfServerDB
+FROM SQLDatabases d
+INNER JOIN Servers s ON d.ServerName = s.ServerName
+ORDER BY d.SizeGB DESC
+"@
+            },
+            @{
+                name = "Nested Group Analysis"
+                description = "Groups containing other groups (nesting depth)"
+                category = "Active Directory"
+                query = @"
+SELECT 
+    g.Name AS GroupName,
+    g.GroupType,
+    g.MemberCount,
+    COUNT(DISTINCT pa.GroupName) AS NestedInGroups
+FROM Groups g
+LEFT JOIN PrivilegedAccounts pa ON g.Name = pa.MemberSamAccountName
+GROUP BY g.Name, g.GroupType, g.MemberCount
+HAVING NestedInGroups > 0
+ORDER BY NestedInGroups DESC, g.MemberCount DESC
+"@
             }
         )
         
         Write-PodeJsonResponse -Value @{ 
             success = $true
             templates = $templates
+        }
+    }
+    
+    # API: Save query
+    Add-PodeRoute -Method Post -Path '/api/saved-queries' -ScriptBlock {
+        try {
+            $body = $WebEvent.Data
+            $savedQueriesPath = Join-Path $using:PSScriptRoot "Data\saved-queries.json"
+            
+            # Create Data folder if it doesn't exist
+            $dataFolder = Split-Path $savedQueriesPath -Parent
+            if (-not (Test-Path $dataFolder)) {
+                New-Item -ItemType Directory -Path $dataFolder | Out-Null
+            }
+            
+            # Load existing queries
+            $queries = @()
+            if (Test-Path $savedQueriesPath) {
+                $queries = Get-Content $savedQueriesPath | ConvertFrom-Json
+            }
+            
+            # Add new query with ID and timestamp
+            $newQuery = @{
+                id = (New-Guid).ToString()
+                name = $body.name
+                description = $body.description
+                query = $body.query
+                table = $body.table
+                created = (Get-Date).ToString('o')
+            }
+            
+            $queries += $newQuery
+            
+            # Save to file
+            $queries | ConvertTo-Json -Depth 10 | Set-Content $savedQueriesPath
+            
+            Write-PodeJsonResponse -Value @{ 
+                success = $true
+                query = $newQuery
+                message = "Query saved successfully"
+            }
+        }
+        catch {
+            Write-PodeJsonResponse -Value @{ 
+                success = $false
+                error = $_.Exception.Message
+            } -StatusCode 500
+        }
+    }
+    
+    # API: Get all saved queries
+    Add-PodeRoute -Method Get -Path '/api/saved-queries' -ScriptBlock {
+        try {
+            $savedQueriesPath = Join-Path $using:PSScriptRoot "Data\saved-queries.json"
+            
+            $queries = @()
+            if (Test-Path $savedQueriesPath) {
+                $queries = Get-Content $savedQueriesPath | ConvertFrom-Json
+            }
+            
+            Write-PodeJsonResponse -Value @{ 
+                success = $true
+                queries = $queries
+            }
+        }
+        catch {
+            Write-PodeJsonResponse -Value @{ 
+                success = $false
+                error = $_.Exception.Message
+            } -StatusCode 500
+        }
+    }
+    
+    # API: Delete saved query
+    Add-PodeRoute -Method Delete -Path '/api/saved-queries/:id' -ScriptBlock {
+        try {
+            $queryId = $WebEvent.Parameters['id']
+            $savedQueriesPath = Join-Path $using:PSScriptRoot "Data\saved-queries.json"
+            
+            if (Test-Path $savedQueriesPath) {
+                $queries = Get-Content $savedQueriesPath | ConvertFrom-Json
+                $queries = $queries | Where-Object { $_.id -ne $queryId }
+                $queries | ConvertTo-Json -Depth 10 | Set-Content $savedQueriesPath
+            }
+            
+            Write-PodeJsonResponse -Value @{ 
+                success = $true
+                message = "Query deleted successfully"
+            }
+        }
+        catch {
+            Write-PodeJsonResponse -Value @{ 
+                success = $false
+                error = $_.Exception.Message
+            } -StatusCode 500
+        }
+    }
+    
+    # API: Add to query history
+    Add-PodeRoute -Method Post -Path '/api/query-history' -ScriptBlock {
+        try {
+            $body = $WebEvent.Data
+            $historyPath = Join-Path $using:PSScriptRoot "Data\query-history.json"
+            
+            # Create Data folder if it doesn't exist
+            $dataFolder = Split-Path $historyPath -Parent
+            if (-not (Test-Path $dataFolder)) {
+                New-Item -ItemType Directory -Path $dataFolder | Out-Null
+            }
+            
+            # Load existing history
+            $history = @()
+            if (Test-Path $historyPath) {
+                $history = Get-Content $historyPath | ConvertFrom-Json
+            }
+            
+            # Add new history entry
+            $entry = @{
+                id = (New-Guid).ToString()
+                query = $body.query
+                table = $body.table
+                rowCount = $body.rowCount
+                executionTime = $body.executionTime
+                timestamp = (Get-Date).ToString('o')
+            }
+            
+            # Keep only last 100 entries
+            $history = @($entry) + $history | Select-Object -First 100
+            
+            # Save to file
+            $history | ConvertTo-Json -Depth 10 | Set-Content $historyPath
+            
+            Write-PodeJsonResponse -Value @{ 
+                success = $true
+            }
+        }
+        catch {
+            Write-PodeJsonResponse -Value @{ 
+                success = $false
+                error = $_.Exception.Message
+            } -StatusCode 500
+        }
+    }
+    
+    # API: Get query history
+    Add-PodeRoute -Method Get -Path '/api/query-history' -ScriptBlock {
+        try {
+            $historyPath = Join-Path $using:PSScriptRoot "Data\query-history.json"
+            
+            $history = @()
+            if (Test-Path $historyPath) {
+                $history = Get-Content $historyPath | ConvertFrom-Json
+            }
+            
+            Write-PodeJsonResponse -Value @{ 
+                success = $true
+                history = $history
+            }
+        }
+        catch {
+            Write-PodeJsonResponse -Value @{ 
+                success = $false
+                error = $_.Exception.Message
+            } -StatusCode 500
+        }
+    }
+    
+    # API: Clear query history
+    Add-PodeRoute -Method Delete -Path '/api/query-history' -ScriptBlock {
+        try {
+            $historyPath = Join-Path $using:PSScriptRoot "Data\query-history.json"
+            
+            if (Test-Path $historyPath) {
+                Remove-Item $historyPath
+            }
+            
+            Write-PodeJsonResponse -Value @{ 
+                success = $true
+                message = "History cleared successfully"
+            }
+        }
+        catch {
+            Write-PodeJsonResponse -Value @{ 
+                success = $false
+                error = $_.Exception.Message
+            } -StatusCode 500
         }
     }
     
