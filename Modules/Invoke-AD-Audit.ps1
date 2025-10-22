@@ -386,7 +386,7 @@ function Get-PrivilegedAccounts {
                 }
             }
             catch {
-                Write-ModuleLog "Failed to query group ${groupName}: $_" -Level Warning
+                Write-ModuleLog "Failed to query group $groupName: $_" -Level Warning
             }
         }
         
@@ -400,293 +400,6 @@ function Get-PrivilegedAccounts {
     }
     catch {
         Write-ModuleLog "Failed to collect privileged accounts: $_" -Level Error
-        return $null
-    }
-}
-
-#endregion
-
-#region GPO Inventory
-
-function Get-GPOInventory {
-    [CmdletBinding()]
-    param()
-    
-    Write-ModuleLog "Collecting Group Policy Objects..." -Level Info
-    
-    try {
-        # Get all GPOs
-        $gpos = Get-GPO -All -ErrorAction Stop
-        
-        $gpoResults = foreach ($gpo in $gpos) {
-            # Get GPO links
-            $links = @()
-            try {
-                $gpoReport = [xml](Get-GPOReport -Guid $gpo.Id -ReportType Xml -ErrorAction Stop)
-                $links = $gpoReport.GPO.LinksTo | ForEach-Object {
-                    [PSCustomObject]@{
-                        SOMPath = $_.SOMPath
-                        Enabled = $_.Enabled
-                        NoOverride = $_.NoOverride
-                    }
-                }
-            }
-            catch {
-                Write-Verbose "Failed to get links for GPO $($gpo.DisplayName)"
-            }
-            
-            [PSCustomObject]@{
-                DisplayName = $gpo.DisplayName
-                Id = $gpo.Id
-                GpoStatus = $gpo.GpoStatus
-                CreationTime = $gpo.CreationTime
-                ModificationTime = $gpo.ModificationTime
-                Owner = $gpo.Owner
-                WmiFilterDescription = $gpo.WmiFilter.Description
-                UserVersionDS = $gpo.User.DSVersion
-                UserVersionSysvol = $gpo.User.SysvolVersion
-                ComputerVersionDS = $gpo.Computer.DSVersion
-                ComputerVersionSysvol = $gpo.Computer.SysvolVersion
-                LinksCount = $links.Count
-                Links = ($links.SOMPath -join '; ')
-                LinksEnabled = (($links | Where-Object {$_.Enabled -eq 'true'}).SOMPath -join '; ')
-            }
-        }
-        
-        $gpoResults | Export-Csv -Path (Join-Path $script:ADOutputPath "AD_GPOs.csv") -NoTypeInformation
-        
-        # Export unlinked GPOs
-        $unlinked = $gpoResults | Where-Object {$_.LinksCount -eq 0}
-        if ($unlinked) {
-            $unlinked | Export-Csv -Path (Join-Path $script:ADOutputPath "AD_GPOs_Unlinked.csv") -NoTypeInformation
-        }
-        
-        Write-ModuleLog "Collected $($gpoResults.Count) GPOs ($($unlinked.Count) unlinked)" -Level Success
-        return $gpoResults
-    }
-    catch {
-        Write-ModuleLog "Failed to collect GPOs: $_" -Level Error
-        return $null
-    }
-}
-
-#endregion
-
-#region AD Trusts
-
-function Get-ADTrustInventory {
-    [CmdletBinding()]
-    param()
-    
-    Write-ModuleLog "Collecting Active Directory trusts..." -Level Info
-    
-    try {
-        $domain = [System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain()
-        $trusts = $domain.GetAllTrustRelationships()
-        
-        $trustResults = foreach ($trust in $trusts) {
-            [PSCustomObject]@{
-                SourceName = $trust.SourceName
-                TargetName = $trust.TargetName
-                TrustType = $trust.TrustType
-                TrustDirection = $trust.TrustDirection
-            }
-        }
-        
-        if ($trustResults) {
-            $trustResults | Export-Csv -Path (Join-Path $script:ADOutputPath "AD_Trusts.csv") -NoTypeInformation
-            Write-ModuleLog "Collected $($trustResults.Count) AD trusts" -Level Success
-        }
-        else {
-            Write-ModuleLog "No AD trusts found" -Level Info
-        }
-        
-        return $trustResults
-    }
-    catch {
-        Write-ModuleLog "Failed to collect AD trusts: $_" -Level Warning
-        return $null
-    }
-}
-
-#endregion
-
-#region Service Accounts
-
-function Get-ServiceAccounts {
-    [CmdletBinding()]
-    param()
-    
-    Write-ModuleLog "Detecting service accounts (heuristic analysis)..." -Level Info
-    
-    try {
-        # Get all enabled user accounts
-        $users = Get-ADUser -Filter {Enabled -eq $true} -Properties ServicePrincipalName, PasswordLastSet, LastLogonDate, Description, MemberOf -ErrorAction Stop
-        
-        $serviceAccounts = $users | Where-Object {
-            # Heuristics for service account detection:
-            # 1. Has SPNs
-            # 2. Password never expires
-            # 3. Name contains svc, service, app, sql, iis, web
-            # 4. Description mentions service, application, automated
-            $hasSPN = $_.ServicePrincipalName.Count -gt 0
-            $namePattern = $_.SamAccountName -match '(svc|service|app|sql|iis|web|admin|system|auto|batch)'
-            $descPattern = $_.Description -match '(service|application|automated|system|SQL|IIS|batch|scheduled)'
-            
-            $hasSPN -or $namePattern -or $descPattern
-        } | ForEach-Object {
-            [PSCustomObject]@{
-                SamAccountName = $_.SamAccountName
-                DisplayName = $_.DisplayName
-                Description = $_.Description
-                Enabled = $_.Enabled
-                PasswordLastSet = $_.PasswordLastSet
-                LastLogonDate = $_.LastLogonDate
-                SPNCount = $_.ServicePrincipalName.Count
-                SPNs = ($_.ServicePrincipalName -join '; ')
-                MemberOf = (($_.MemberOf | ForEach-Object {($_ -split ',')[0] -replace 'CN='}) -join '; ')
-                DetectionReason = @(
-                    if ($_.ServicePrincipalName.Count -gt 0) { "HasSPN" }
-                    if ($_.SamAccountName -match '(svc|service|app|sql|iis|web)') { "NamePattern" }
-                    if ($_.Description -match '(service|application|automated)') { "DescPattern" }
-                ) -join ', '
-            }
-        }
-        
-        if ($serviceAccounts) {
-            $serviceAccounts | Export-Csv -Path (Join-Path $script:ADOutputPath "AD_ServiceAccounts.csv") -NoTypeInformation
-            Write-ModuleLog "Detected $($serviceAccounts.Count) potential service accounts" -Level Success
-        }
-        else {
-            Write-ModuleLog "No service accounts detected" -Level Info
-        }
-        
-        return $serviceAccounts
-    }
-    catch {
-        Write-ModuleLog "Failed to detect service accounts: $_" -Level Error
-        return $null
-    }
-}
-
-#endregion
-
-#region Password Policies
-
-function Get-PasswordPolicyInventory {
-    [CmdletBinding()]
-    param()
-    
-    Write-ModuleLog "Collecting password policies..." -Level Info
-    
-    try {
-        # Default domain policy
-        $defaultPolicy = Get-ADDefaultDomainPasswordPolicy -ErrorAction Stop
-        
-        $policyResults = @()
-        $policyResults += [PSCustomObject]@{
-            Name = "Default Domain Policy"
-            ComplexityEnabled = $defaultPolicy.ComplexityEnabled
-            MinPasswordLength = $defaultPolicy.MinPasswordLength
-            MinPasswordAge = $defaultPolicy.MinPasswordAge.Days
-            MaxPasswordAge = $defaultPolicy.MaxPasswordAge.Days
-            PasswordHistoryCount = $defaultPolicy.PasswordHistoryCount
-            LockoutDuration = $defaultPolicy.LockoutDuration.Minutes
-            LockoutObservationWindow = $defaultPolicy.LockoutObservationWindow.Minutes
-            LockoutThreshold = $defaultPolicy.LockoutThreshold
-            ReversibleEncryptionEnabled = $defaultPolicy.ReversibleEncryptionEnabled
-            AppliesTo = "All users (default)"
-        }
-        
-        # Fine-Grained Password Policies (FGPP)
-        try {
-            $fgpps = Get-ADFineGrainedPasswordPolicy -Filter * -ErrorAction Stop
-            foreach ($fgpp in $fgpps) {
-                $appliesTo = (Get-ADFineGrainedPasswordPolicySubject -Identity $fgpp | Select-Object -ExpandProperty Name) -join '; '
-                
-                $policyResults += [PSCustomObject]@{
-                    Name = $fgpp.Name
-                    ComplexityEnabled = $fgpp.ComplexityEnabled
-                    MinPasswordLength = $fgpp.MinPasswordLength
-                    MinPasswordAge = $fgpp.MinPasswordAge.Days
-                    MaxPasswordAge = $fgpp.MaxPasswordAge.Days
-                    PasswordHistoryCount = $fgpp.PasswordHistoryCount
-                    LockoutDuration = $fgpp.LockoutDuration.Minutes
-                    LockoutObservationWindow = $fgpp.LockoutObservationWindow.Minutes
-                    LockoutThreshold = $fgpp.LockoutThreshold
-                    ReversibleEncryptionEnabled = $fgpp.ReversibleEncryptionEnabled
-                    AppliesTo = $appliesTo
-                    Precedence = $fgpp.Precedence
-                }
-            }
-        }
-        catch {
-            Write-ModuleLog "No Fine-Grained Password Policies found" -Level Info
-        }
-        
-        $policyResults | Export-Csv -Path (Join-Path $script:ADOutputPath "AD_PasswordPolicies.csv") -NoTypeInformation
-        Write-ModuleLog "Collected $($policyResults.Count) password policies" -Level Success
-        
-        return $policyResults
-    }
-    catch {
-        Write-ModuleLog "Failed to collect password policies: $_" -Level Error
-        return $null
-    }
-}
-
-#endregion
-
-#region DNS Zones
-
-function Get-DNSZoneInventory {
-    [CmdletBinding()]
-    param()
-    
-    Write-ModuleLog "Collecting DNS zones..." -Level Info
-    
-    try {
-        # Get domain controllers (DNS servers)
-        $dcs = Get-ADDomainController -Filter * -ErrorAction Stop
-        $primaryDC = $dcs | Select-Object -First 1
-        
-        Write-ModuleLog "Querying DNS zones from $($primaryDC.HostName)..." -Level Info
-        
-        # Query DNS zones via CIM
-        $zones = Get-CimInstance -ComputerName $primaryDC.HostName -Namespace "root\MicrosoftDNS" -ClassName "MicrosoftDNS_Zone" -ErrorAction Stop
-        
-        $zoneResults = $zones | ForEach-Object {
-            [PSCustomObject]@{
-                ZoneName = $_.Name
-                ZoneType = switch ($_.ZoneType) {
-                    0 { "Cache" }
-                    1 { "Primary" }
-                    2 { "Secondary" }
-                    3 { "Stub" }
-                    4 { "Forwarder" }
-                    default { "Unknown" }
-                }
-                DynamicUpdate = switch ($_.AllowUpdate) {
-                    0 { "None" }
-                    1 { "Nonsecure and secure" }
-                    2 { "Secure only" }
-                    default { "Unknown" }
-                }
-                IsReverseLookupZone = $_.IsReverseLookupZone
-                IsDsIntegrated = $_.DsIntegrated
-                IsAutoCreated = $_.IsAutoCreated
-                IsPaused = $_.Paused
-                IsShutdown = $_.Shutdown
-            }
-        }
-        
-        $zoneResults | Export-Csv -Path (Join-Path $script:ADOutputPath "AD_DNS_Zones.csv") -NoTypeInformation
-        Write-ModuleLog "Collected $($zoneResults.Count) DNS zones" -Level Success
-        
-        return $zoneResults
-    }
-    catch {
-        Write-ModuleLog "Failed to collect DNS zones: $_" -Level Warning
         return $null
     }
 }
@@ -712,8 +425,7 @@ function Get-ServerHardwareInventory {
     Write-ModuleLog "Querying $MaxParallel servers in parallel (timeout: $TimeoutSeconds seconds each)" -Level Info
     
     $serverResults = [System.Collections.Concurrent.ConcurrentBag[object]]::new()
-    $processed = 0
-    
+
     # Process servers in batches
     $Servers | ForEach-Object -ThrottleLimit $MaxParallel -Parallel {
         $server = $_
@@ -721,14 +433,13 @@ function Get-ServerHardwareInventory {
         if ([string]::IsNullOrWhiteSpace($serverName)) {
             $serverName = $server.Name
         }
-        
+
         $resultBag = $using:serverResults
         $timeout = $using:TimeoutSeconds
         $skipOffline = $using:SkipOffline
-        
+
         # Progress tracking
-        $processed = [System.Threading.Interlocked]::Increment(([ref]$using:processed))
-        Write-Verbose "[$processed/$($using:Servers.Count)] Processing $serverName..."
+        Write-Verbose "Processing $serverName..."
         
         $result = [PSCustomObject]@{
             ServerName = $serverName
@@ -860,12 +571,12 @@ function Get-ServerStorageInventory {
     
     Write-ModuleLog "Collecting storage information from $($Servers.Count) servers..." -Level Info
     
-    $outputPath = $script:ServerOutputPath  # Capture for use in parallel block
     $storageResults = [System.Collections.Concurrent.ConcurrentBag[object]]::new()
     
     $Servers | ForEach-Object -ThrottleLimit $MaxParallel -Parallel {
         $server = $_
         $serverName = $server.ServerName
+        $resultBag = $using:storageResults
         
         try {
             $sessionOption = New-CimSessionOption -Protocol Dcom
@@ -892,14 +603,14 @@ function Get-ServerStorageInventory {
             }
         }
         catch {
-            Write-Verbose "Failed to collect storage from ${serverName}: $_"
+            Write-Verbose "Failed to collect storage from $serverName: $_"
         }
     }
     
     $results = @($storageResults)
     if ($results.Count -gt 0) {
-        $results | Export-Csv -Path (Join-Path $outputPath "Server_Storage_Details.csv") -NoTypeInformation
-        Write-ModuleLog "Collected $($results.Count) disk volumes from $($Servers.Count) servers" -Level Success
+        $results | Export-Csv -Path (Join-Path $script:ServerOutputPath "Server_Storage_Details.csv") -NoTypeInformation
+        Write-Verbose "Collected $($results.Count) disk volumes from servers"
     }
     
     return $results
@@ -921,7 +632,6 @@ function Get-ServerApplications {
     Write-ModuleLog "Collecting installed applications from $($Servers.Count) servers..." -Level Info
     Write-ModuleLog "This may take 15-30 minutes..." -Level Warning
     
-    $outputPath = $script:ServerOutputPath  # Capture for use in parallel block
     $appResults = [System.Collections.Concurrent.ConcurrentBag[object]]::new()
     
     $Servers | ForEach-Object -ThrottleLimit $MaxParallel -Parallel {
@@ -967,23 +677,23 @@ function Get-ServerApplications {
             }
         }
         catch {
-            Write-Verbose "Failed to collect applications from ${serverName}: $_"
+            Write-Verbose "Failed to collect applications from $serverName: $_"
         }
     }
     
     $results = @($appResults)
     if ($results.Count -gt 0) {
-        $results | Export-Csv -Path (Join-Path $outputPath "Server_Installed_Applications.csv") -NoTypeInformation
-        Write-ModuleLog "Collected $($results.Count) application installations" -Level Success
-        
+        $results | Export-Csv -Path (Join-Path $script:ServerOutputPath "Server_Installed_Applications.csv") -NoTypeInformation
+        Write-Verbose "Collected $($results.Count) application installations"
+
         # Create application summary (aggregated)
         $summary = $results | Group-Object ApplicationName | Select-Object @{N='ApplicationName';E={$_.Name}},
             @{N='ServerCount';E={$_.Count}},
             @{N='MostCommonVersion';E={($_.Group | Group-Object Version | Sort-Object Count -Descending | Select-Object -First 1).Name}},
             @{N='Servers';E={($_.Group.ServerName | Sort-Object -Unique) -join '; '}}
-        
-        $summary | Sort-Object ServerCount -Descending | 
-            Export-Csv -Path (Join-Path $outputPath "Server_Application_Summary.csv") -NoTypeInformation
+
+        $summary | Sort-Object ServerCount -Descending |
+            Export-Csv -Path (Join-Path $script:ServerOutputPath "Server_Application_Summary.csv") -NoTypeInformation
     }
     
     return $results
@@ -1007,7 +717,6 @@ function Get-ServerEventLogs {
     Write-ModuleLog "Collecting event logs from $($Servers.Count) servers (last $Days days)..." -Level Info
     Write-ModuleLog "This may take 15-30 minutes for large Security logs..." -Level Warning
     
-    $outputPath = $script:ServerOutputPath  # Capture for use in parallel block
     $criticalEvents = [System.Collections.Concurrent.ConcurrentBag[object]]::new()
     $errorEvents = [System.Collections.Concurrent.ConcurrentBag[object]]::new()
     
@@ -1038,10 +747,17 @@ function Get-ServerEventLogs {
                              @{N='Count';E={$_.Count}},
                              @{N='FirstOccurrence';E={($_.Group | Sort-Object TimeCreated | Select-Object -First 1).TimeCreated}},
                              @{N='LastOccurrence';E={($_.Group | Sort-Object TimeCreated -Descending | Select-Object -First 1).TimeCreated}},
-                             @{N='Message';E={($_.Group[0].Message -replace '[\r\n]+', ' ').Substring(0, [Math]::Min(500, ($_.Group[0].Message -replace '[\r\n]+', ' ').Length))}}
+                             @{N='Message';E={
+                                 $msg = $_.Group[0].Message
+                                 if ($msg) {
+                                     ($msg -replace '[\r\n]+', ' ').Substring(0, [Math]::Min(500, $msg.Length))
+                                 } else {
+                                     'No message'
+                                 }
+                             }}
             
-            foreach ($logEvent in $criticals) {
-                $criticalBag.Add($logEvent)
+            foreach ($event in $criticals) {
+                $criticalBag.Add($event)
             }
             
             # Query Error events
@@ -1060,30 +776,37 @@ function Get-ServerEventLogs {
                              @{N='Count';E={$_.Count}},
                              @{N='FirstOccurrence';E={($_.Group | Sort-Object TimeCreated | Select-Object -First 1).TimeCreated}},
                              @{N='LastOccurrence';E={($_.Group | Sort-Object TimeCreated -Descending | Select-Object -First 1).TimeCreated}},
-                             @{N='Message';E={($_.Group[0].Message -replace '[\r\n]+', ' ').Substring(0, [Math]::Min(500, ($_.Group[0].Message -replace '[\r\n]+', ' ').Length))}}
+                             @{N='Message';E={
+                                 $msg = $_.Group[0].Message
+                                 if ($msg) {
+                                     ($msg -replace '[\r\n]+', ' ').Substring(0, [Math]::Min(500, $msg.Length))
+                                 } else {
+                                     'No message'
+                                 }
+                             }}
             
-            foreach ($logEvent in $errors) {
-                $errorBag.Add($logEvent)
+            foreach ($event in $errors) {
+                $errorBag.Add($event)
             }
             
             Write-Verbose "Collected event logs from $serverName"
         }
         catch {
-            Write-Verbose "Failed to collect event logs from ${serverName}: $_"
+            Write-Verbose "Failed to collect event logs from $serverName: $_"
         }
     }
     
     # Export results
     $criticalResults = @($criticalEvents) | Sort-Object Count -Descending
     if ($criticalResults.Count -gt 0) {
-        $criticalResults | Export-Csv -Path (Join-Path $outputPath "Server_Event_Log_Critical.csv") -NoTypeInformation
-        Write-ModuleLog "Collected $($criticalResults.Count) unique critical event types" -Level Success
+        $criticalResults | Export-Csv -Path (Join-Path $script:ServerOutputPath "Server_Event_Log_Critical.csv") -NoTypeInformation
+        Write-Verbose "Collected $($criticalResults.Count) unique critical event types"
     }
-    
+
     $errorResults = @($errorEvents) | Sort-Object Count -Descending
     if ($errorResults.Count -gt 0) {
-        $errorResults | Export-Csv -Path (Join-Path $outputPath "Server_Event_Log_Errors.csv") -NoTypeInformation
-        Write-ModuleLog "Collected $($errorResults.Count) unique error event types" -Level Success
+        $errorResults | Export-Csv -Path (Join-Path $script:ServerOutputPath "Server_Event_Log_Errors.csv") -NoTypeInformation
+        Write-Verbose "Collected $($errorResults.Count) unique error event types"
     }
     
     return @{
@@ -1110,7 +833,6 @@ function Get-ServerLogonHistory {
     Write-ModuleLog "Collecting logon history from $($Servers.Count) servers (last $Days days)..." -Level Info
     Write-ModuleLog "This may take 20-40 minutes for large Security logs..." -Level Warning
     
-    $outputPath = $script:ServerOutputPath  # Capture for use in parallel block
     $logonResults = [System.Collections.Concurrent.ConcurrentBag[object]]::new()
     $failureResults = [System.Collections.Concurrent.ConcurrentBag[object]]::new()
     
@@ -1204,388 +926,26 @@ function Get-ServerLogonHistory {
             Write-Verbose "Collected logon history from $serverName"
         }
         catch {
-            Write-Verbose "Failed to collect logon history from ${serverName}: $_"
+            Write-Verbose "Failed to collect logon history from $serverName: $_"
         }
     }
     
     # Export results
     $logonResults = @($logonResults) | Sort-Object LogonCount -Descending
     if ($logonResults.Count -gt 0) {
-        $logonResults | Export-Csv -Path (Join-Path $outputPath "Server_Logon_History.csv") -NoTypeInformation
-        Write-ModuleLog "Collected logon history for $($logonResults.Count) users" -Level Success
+        $logonResults | Export-Csv -Path (Join-Path $script:ServerOutputPath "Server_Logon_History.csv") -NoTypeInformation
+        Write-Verbose "Collected logon history for $($logonResults.Count) users"
     }
-    
+
     $failureResults = @($failureResults) | Sort-Object FailureCount -Descending
     if ($failureResults.Count -gt 0) {
-        $failureResults | Export-Csv -Path (Join-Path $outputPath "Server_Logon_Failures.csv") -NoTypeInformation
-        Write-ModuleLog "Collected $($failureResults.Count) users with failed logon attempts" -Level Success
+        $failureResults | Export-Csv -Path (Join-Path $script:ServerOutputPath "Server_Logon_Failures.csv") -NoTypeInformation
+        Write-Verbose "Collected $($failureResults.Count) users with failed logon attempts"
     }
     
     return @{
         Logons = $logonResults
         Failures = $failureResults
-    }
-}
-
-#endregion
-
-#region SQL Server Inventory
-
-function Get-SQLServerInventory {
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory = $true)]
-        [array]$Servers,
-        
-        [string]$KnownInstances,
-        
-        [int]$MaxParallel = 5  # Lower for SQL queries
-    )
-    
-    Write-ModuleLog "Discovering SQL Server instances on $($Servers.Count) servers..." -Level Info
-    
-    # Step 1: Discover SQL instances
-    $sqlInstances = @()
-    
-    # Method 1: From SPNs (already in AD)
-    Write-ModuleLog "Discovering SQL instances from SPNs..." -Level Info
-    try {
-        $spnAccounts = Get-ADObject -Filter {ServicePrincipalName -like "MSSQLSvc/*"} -Properties ServicePrincipalName
-        foreach ($account in $spnAccounts) {
-            foreach ($spn in $account.ServicePrincipalName) {
-                if ($spn -match '^MSSQLSvc/([^:]+):?(\d+)?$|^MSSQLSvc/([^:]+):([^:]+)$') {
-                    $serverName = if ($Matches[1]) { $Matches[1] } else { $Matches[3] }
-                    $instanceName = if ($Matches[4]) { $Matches[4] } else { 'MSSQLSERVER' }
-                    
-                    $sqlInstances += [PSCustomObject]@{
-                        ServerName = $serverName
-                        InstanceName = $instanceName
-                        ConnectionString = if ($instanceName -eq 'MSSQLSERVER') { $serverName } else { "$serverName\$instanceName" }
-                        DiscoveryMethod = 'SPN'
-                    }
-                }
-            }
-        }
-    }
-    catch {
-        Write-ModuleLog "Failed to query SPNs: $_" -Level Warning
-    }
-    
-    # Method 2: From installed applications (servers with SQL in app list)
-    Write-ModuleLog "Checking installed applications for SQL Server..." -Level Info
-    $applicationsPath = Join-Path $script:ServerOutputPath "Server_Installed_Applications.csv"
-    if (Test-Path $applicationsPath) {
-        $apps = Import-Csv $applicationsPath
-        $sqlServers = $apps | Where-Object {$_.ApplicationName -like "*SQL Server*" -and $_.ApplicationName -notlike "*Management Studio*"} | 
-            Select-Object -ExpandProperty ServerName -Unique
-        
-        foreach ($serverName in $sqlServers) {
-            # Add default instance if not already discovered
-            if (-not ($sqlInstances | Where-Object {$_.ServerName -eq $serverName -and $_.InstanceName -eq 'MSSQLSERVER'})) {
-                $sqlInstances += [PSCustomObject]@{
-                    ServerName = $serverName
-                    InstanceName = 'MSSQLSERVER'
-                    ConnectionString = $serverName
-                    DiscoveryMethod = 'InstalledApp'
-                }
-            }
-        }
-    }
-    
-    # Method 3: Known instances (manual list from GUI)
-    if ($KnownInstances) {
-        Write-ModuleLog "Adding known SQL instances from manual list..." -Level Info
-        $knownList = $KnownInstances -split '[,;]' | ForEach-Object { $_.Trim() }
-        foreach ($instance in $knownList) {
-            if ($instance -match '([^\\]+)\\(.+)') {
-                $serverName = $Matches[1]
-                $instanceName = $Matches[2]
-            } else {
-                $serverName = $instance
-                $instanceName = 'MSSQLSERVER'
-            }
-            
-            if (-not ($sqlInstances | Where-Object {$_.ConnectionString -eq $instance})) {
-                $sqlInstances += [PSCustomObject]@{
-                    ServerName = $serverName
-                    InstanceName = $instanceName
-                    ConnectionString = $instance
-                    DiscoveryMethod = 'Manual'
-                }
-            }
-        }
-    }
-    
-    $sqlInstances = $sqlInstances | Sort-Object ConnectionString -Unique
-    Write-ModuleLog "Discovered $($sqlInstances.Count) SQL Server instances" -Level Success
-    
-    if ($sqlInstances.Count -eq 0) {
-        Write-ModuleLog "No SQL Server instances found - skipping SQL inventory" -Level Warning
-        return $null
-    }
-    
-    # Export instance list
-    $sqlInstances | Export-Csv -Path (Join-Path $script:SQLOutputPath "SQL_Instances.csv") -NoTypeInformation
-    
-    # Step 2: Query each SQL instance for detailed information
-    Write-ModuleLog "Querying $($sqlInstances.Count) SQL instances for databases, logins, and jobs..." -Level Info
-    Write-ModuleLog "This may take 15-30 minutes..." -Level Warning
-    
-    $sqlOutputPath = $script:SQLOutputPath  # Capture for use in parallel block
-    $databases = [System.Collections.Concurrent.ConcurrentBag[object]]::new()
-    $logins = [System.Collections.Concurrent.ConcurrentBag[object]]::new()
-    $jobs = [System.Collections.Concurrent.ConcurrentBag[object]]::new()
-    $linkedServers = [System.Collections.Concurrent.ConcurrentBag[object]]::new()
-    $instanceDetails = [System.Collections.Concurrent.ConcurrentBag[object]]::new()
-    
-    $sqlInstances | ForEach-Object -ThrottleLimit $MaxParallel -Parallel {
-        $instance = $_
-        $connectionString = $instance.ConnectionString
-        
-        $dbBag = $using:databases
-        $loginBag = $using:logins
-        $jobBag = $using:jobs
-        $linkedBag = $using:linkedServers
-        $instanceBag = $using:instanceDetails
-        
-        try {
-            # Build connection string
-            $connStr = "Server=$connectionString;Database=master;Integrated Security=True;Connection Timeout=15;Application Name=M&A Audit"
-            $conn = New-Object System.Data.SqlClient.SqlConnection($connStr)
-            $conn.Open()
-            
-            try {
-                # Query instance information
-                $cmd = $conn.CreateCommand()
-                $cmd.CommandText = @"
-SELECT 
-    SERVERPROPERTY('ServerName') AS ServerName,
-    SERVERPROPERTY('InstanceName') AS InstanceName,
-    SERVERPROPERTY('ProductVersion') AS ProductVersion,
-    SERVERPROPERTY('ProductLevel') AS ProductLevel,
-    SERVERPROPERTY('Edition') AS Edition,
-    SERVERPROPERTY('IsClustered') AS IsClustered,
-    SERVERPROPERTY('IsHadrEnabled') AS IsHadrEnabled,
-    @@VERSION AS VersionString
-"@
-                $reader = $cmd.ExecuteReader()
-                if ($reader.Read()) {
-                    $instanceBag.Add([PSCustomObject]@{
-                        ConnectionString = $connectionString
-                        ServerName = $reader['ServerName']
-                        InstanceName = if ($reader['InstanceName'] -eq [DBNull]::Value) { 'MSSQLSERVER' } else { $reader['InstanceName'] }
-                        ProductVersion = $reader['ProductVersion']
-                        ProductLevel = $reader['ProductLevel']
-                        Edition = $reader['Edition']
-                        IsClustered = $reader['IsClustered']
-                        IsHadrEnabled = $reader['IsHadrEnabled']
-                        VersionString = $reader['VersionString']
-                    })
-                }
-                $reader.Close()
-                
-                # Query databases
-                $cmd.CommandText = @"
-SELECT 
-    d.name AS DatabaseName,
-    d.database_id AS DatabaseID,
-    d.state_desc AS State,
-    d.recovery_model_desc AS RecoveryModel,
-    d.compatibility_level AS CompatibilityLevel,
-    SUSER_SNAME(d.owner_sid) AS Owner,
-    d.create_date AS CreateDate,
-    d.is_read_only AS IsReadOnly,
-    CAST(SUM(mf.size) * 8.0 / 1024 AS DECIMAL(18,2)) AS SizeMB,
-    (SELECT MAX(backup_finish_date) FROM msdb.dbo.backupset WHERE database_name = d.name AND type = 'D') AS LastFullBackup,
-    (SELECT MAX(backup_finish_date) FROM msdb.dbo.backupset WHERE database_name = d.name AND type = 'I') AS LastDiffBackup,
-    (SELECT MAX(backup_finish_date) FROM msdb.dbo.backupset WHERE database_name = d.name AND type = 'L') AS LastLogBackup
-FROM sys.databases d
-LEFT JOIN sys.master_files mf ON d.database_id = mf.database_id
-WHERE d.database_id > 4  -- Exclude system databases
-GROUP BY d.name, d.database_id, d.state_desc, d.recovery_model_desc, d.compatibility_level, d.owner_sid, d.create_date, d.is_read_only
-ORDER BY d.name
-"@
-                $reader = $cmd.ExecuteReader()
-                while ($reader.Read()) {
-                    $lastFullBackup = if ($reader['LastFullBackup'] -eq [DBNull]::Value) { $null } else { $reader['LastFullBackup'] }
-                    $daysSinceBackup = if ($lastFullBackup) { [math]::Round(((Get-Date) - $lastFullBackup).TotalDays) } else { 999 }
-                    
-                    $dbBag.Add([PSCustomObject]@{
-                        ConnectionString = $connectionString
-                        DatabaseName = $reader['DatabaseName']
-                        State = $reader['State']
-                        RecoveryModel = $reader['RecoveryModel']
-                        CompatibilityLevel = $reader['CompatibilityLevel']
-                        Owner = $reader['Owner']
-                        CreateDate = $reader['CreateDate']
-                        IsReadOnly = $reader['IsReadOnly']
-                        SizeMB = $reader['SizeMB']
-                        SizeGB = [math]::Round($reader['SizeMB'] / 1024, 2)
-                        LastFullBackup = $lastFullBackup
-                        LastDiffBackup = if ($reader['LastDiffBackup'] -eq [DBNull]::Value) { $null } else { $reader['LastDiffBackup'] }
-                        LastLogBackup = if ($reader['LastLogBackup'] -eq [DBNull]::Value) { $null } else { $reader['LastLogBackup'] }
-                        DaysSinceLastBackup = $daysSinceBackup
-                        BackupIssue = if ($daysSinceBackup -gt 7) { 'NoRecentBackup' } elseif ($reader['RecoveryModel'] -eq 'FULL' -and $reader['LastLogBackup'] -eq [DBNull]::Value) { 'FullRecoveryNoLogBackup' } else { 'OK' }
-                    })
-                }
-                $reader.Close()
-                
-                # Query logins
-                $cmd.CommandText = @"
-SELECT 
-    sp.name AS LoginName,
-    sp.type_desc AS LoginType,
-    sp.is_disabled AS IsDisabled,
-    sp.create_date AS CreateDate,
-    sp.default_database_name AS DefaultDatabase,
-    STRING_AGG(sr.name, ', ') AS ServerRoles
-FROM sys.server_principals sp
-LEFT JOIN sys.server_role_members srm ON sp.principal_id = srm.member_principal_id
-LEFT JOIN sys.server_principals sr ON srm.role_principal_id = sr.principal_id
-WHERE sp.type IN ('S', 'U', 'G')  -- SQL, Windows User, Windows Group
-GROUP BY sp.name, sp.type_desc, sp.is_disabled, sp.create_date, sp.default_database_name
-ORDER BY sp.name
-"@
-                $reader = $cmd.ExecuteReader()
-                while ($reader.Read()) {
-                    $loginBag.Add([PSCustomObject]@{
-                        ConnectionString = $connectionString
-                        LoginName = $reader['LoginName']
-                        LoginType = $reader['LoginType']
-                        IsDisabled = $reader['IsDisabled']
-                        CreateDate = $reader['CreateDate']
-                        DefaultDatabase = $reader['DefaultDatabase']
-                        ServerRoles = if ($reader['ServerRoles'] -eq [DBNull]::Value) { '' } else { $reader['ServerRoles'] }
-                        IsSysAdmin = if ($reader['ServerRoles'] -ne [DBNull]::Value -and $reader['ServerRoles'].ToString().Contains('sysadmin')) { $true } else { $false }
-                    })
-                }
-                $reader.Close()
-                
-                # Query SQL Agent jobs
-                $cmd.CommandText = @"
-SELECT 
-    j.name AS JobName,
-    j.enabled AS IsEnabled,
-    SUSER_SNAME(j.owner_sid) AS Owner,
-    j.date_created AS CreateDate,
-    j.date_modified AS ModifiedDate,
-    jh.run_status AS LastRunStatus,
-    CASE jh.run_status
-        WHEN 0 THEN 'Failed'
-        WHEN 1 THEN 'Succeeded'
-        WHEN 2 THEN 'Retry'
-        WHEN 3 THEN 'Canceled'
-        WHEN 4 THEN 'In Progress'
-        ELSE 'Unknown'
-    END AS LastRunStatusDesc,
-    STUFF(STUFF(STUFF(CAST(jh.run_date AS VARCHAR(8)), 5, 0, '-'), 8, 0, '-'), 11, 0, ' ') + ' ' +
-    STUFF(STUFF(RIGHT('000000' + CAST(jh.run_time AS VARCHAR(6)), 6), 3, 0, ':'), 6, 0, ':') AS LastRunDate
-FROM msdb.dbo.sysjobs j
-LEFT JOIN (
-    SELECT job_id, run_status, run_date, run_time,
-           ROW_NUMBER() OVER (PARTITION BY job_id ORDER BY run_date DESC, run_time DESC) AS rn
-    FROM msdb.dbo.sysjobhistory
-    WHERE step_id = 0
-) jh ON j.job_id = jh.job_id AND jh.rn = 1
-ORDER BY j.name
-"@
-                $reader = $cmd.ExecuteReader()
-                while ($reader.Read()) {
-                    $jobBag.Add([PSCustomObject]@{
-                        ConnectionString = $connectionString
-                        JobName = $reader['JobName']
-                        IsEnabled = $reader['IsEnabled']
-                        Owner = $reader['Owner']
-                        CreateDate = $reader['CreateDate']
-                        ModifiedDate = $reader['ModifiedDate']
-                        LastRunStatus = if ($reader['LastRunStatus'] -eq [DBNull]::Value) { $null } else { $reader['LastRunStatusDesc'] }
-                        LastRunDate = if ($reader['LastRunDate'] -eq [DBNull]::Value) { $null } else { $reader['LastRunDate'] }
-                    })
-                }
-                $reader.Close()
-                
-                # Query linked servers
-                $cmd.CommandText = @"
-SELECT 
-    name AS LinkedServerName,
-    product AS Product,
-    provider AS Provider,
-    data_source AS DataSource,
-    is_remote_login_enabled AS IsRemoteLoginEnabled
-FROM sys.servers
-WHERE is_linked = 1
-ORDER BY name
-"@
-                $reader = $cmd.ExecuteReader()
-                while ($reader.Read()) {
-                    $linkedBag.Add([PSCustomObject]@{
-                        ConnectionString = $connectionString
-                        LinkedServerName = $reader['LinkedServerName']
-                        Product = $reader['Product']
-                        Provider = $reader['Provider']
-                        DataSource = $reader['DataSource']
-                        IsRemoteLoginEnabled = $reader['IsRemoteLoginEnabled']
-                    })
-                }
-                $reader.Close()
-                
-                Write-Verbose "Successfully queried SQL instance: $connectionString"
-            }
-            finally {
-                $conn.Close()
-            }
-        }
-        catch {
-            Write-Verbose "Failed to query SQL instance $connectionString : $_"
-        }
-    }
-    
-    # Export results
-    $instanceResults = @($instanceDetails)
-    if ($instanceResults.Count -gt 0) {
-        $instanceResults | Export-Csv -Path (Join-Path $sqlOutputPath "SQL_Instance_Details.csv") -NoTypeInformation
-    }
-    
-    $dbResults = @($databases)
-    if ($dbResults.Count -gt 0) {
-        $dbResults | Export-Csv -Path (Join-Path $sqlOutputPath "SQL_Databases.csv") -NoTypeInformation
-        
-        # Backup status report
-        $backupIssues = $dbResults | Where-Object {$_.BackupIssue -ne 'OK'}
-        if ($backupIssues) {
-            $backupIssues | Export-Csv -Path (Join-Path $sqlOutputPath "SQL_Backup_Issues.csv") -NoTypeInformation
-        }
-    }
-    
-    $loginResults = @($logins)
-    if ($loginResults.Count -gt 0) {
-        $loginResults | Export-Csv -Path (Join-Path $sqlOutputPath "SQL_Logins.csv") -NoTypeInformation
-        
-        # Sysadmin accounts
-        $sysadmins = $loginResults | Where-Object {$_.IsSysAdmin}
-        if ($sysadmins) {
-            $sysadmins | Export-Csv -Path (Join-Path $sqlOutputPath "SQL_Logins_SysAdmin.csv") -NoTypeInformation
-        }
-    }
-    
-    $jobResults = @($jobs)
-    if ($jobResults.Count -gt 0) {
-        $jobResults | Export-Csv -Path (Join-Path $sqlOutputPath "SQL_Agent_Jobs.csv") -NoTypeInformation
-    }
-    
-    $linkedResults = @($linkedServers)
-    if ($linkedResults.Count -gt 0) {
-        $linkedResults | Export-Csv -Path (Join-Path $sqlOutputPath "SQL_Linked_Servers.csv") -NoTypeInformation
-    }
-    
-    Write-ModuleLog "SQL inventory complete: $($instanceResults.Count) instances, $($dbResults.Count) databases, $($loginResults.Count) logins, $($jobResults.Count) jobs" -Level Success
-    
-    return @{
-        Instances = $instanceResults
-        Databases = $dbResults
-        Logins = $loginResults
-        Jobs = $jobResults
-        LinkedServers = $linkedResults
     }
 }
 
@@ -1612,25 +972,15 @@ try {
     # Collect privileged accounts
     $privilegedAccounts = Get-PrivilegedAccounts
     
-    # Collect GPO inventory
-    $gpos = Get-GPOInventory
-    if ($gpos) { $script:Stats.TotalGPOs = $gpos.Count }
-    
-    # Collect AD trusts
-    $trusts = Get-ADTrustInventory
-    if ($trusts) { $script:Stats.TotalTrusts = $trusts.Count }
-    
-    # Detect service accounts
-    $serviceAccounts = Get-ServiceAccounts
-    if ($serviceAccounts) { $script:Stats.ServiceAccounts = $serviceAccounts.Count }
-    
-    # Collect password policies
-    $passwordPolicies = Get-PasswordPolicyInventory
-    if ($passwordPolicies) { $script:Stats.PasswordPolicies = $passwordPolicies.Count }
-    
-    # Collect DNS zones
-    $dnsZones = Get-DNSZoneInventory
-    if ($dnsZones) { $script:Stats.DNSZones = $dnsZones.Count }
+    # TODO: Implement remaining AD audit components:
+    # - GPO inventory
+    # - Service accounts
+    # - Trusts
+    # - ACL analysis
+    # - Password policies
+    # - Kerberos delegation
+    # - DNS zones
+    # - DHCP scopes
     
     # Server Inventory (if enabled)
     if ($ServerInventory -and $memberServers) {
@@ -1652,11 +1002,9 @@ try {
         else {
             # Step 2: Storage inventory
             $storage = Get-ServerStorageInventory -Servers $onlineServers -MaxParallel $MaxParallelServers
-            Write-ModuleLog "Collected storage inventory: $($storage.Count) volumes" -Level Success
             
             # Step 3: Installed applications
             $applications = Get-ServerApplications -Servers $onlineServers -MaxParallel $MaxParallelServers
-            Write-ModuleLog "Collected application inventory: $($applications.Count) app instances" -Level Success
             
             # Step 4: Event logs (if not skipped)
             if (-not $SkipEventLogs) {
@@ -1672,13 +1020,7 @@ try {
             
             # Step 6: SQL Server inventory (if not skipped)
             if (-not $SkipSQL) {
-                $sqlInventory = Get-SQLServerInventory -Servers $onlineServers -KnownInstances $KnownSQLInstances -MaxParallel 5
-                if ($sqlInventory) {
-                    $script:Stats.SQLInstances = $sqlInventory.Instances.Count
-                    $script:Stats.SQLDatabases = $sqlInventory.Databases.Count
-                    $script:Stats.SQLLogins = $sqlInventory.Logins.Count
-                    $script:Stats.SQLJobs = $sqlInventory.Jobs.Count
-                }
+                Write-ModuleLog "SQL Server inventory will be implemented in next iteration" -Level Warning
             }
             
             Write-ModuleLog "Server inventory completed for $($onlineServers.Count) servers" -Level Success
