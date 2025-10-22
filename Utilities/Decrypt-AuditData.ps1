@@ -90,7 +90,7 @@ function Write-DecryptLog {
     Write-Host "[$timestamp] [$Level] $Message" -ForegroundColor $color
 }
 
-function Decrypt-EFSFolder {
+function Unprotect-EFSFolder {
     param([string]$Path, [string]$Destination)
 
     Write-DecryptLog "Decrypting EFS-encrypted folder..." -Level Info
@@ -113,7 +113,7 @@ function Decrypt-EFSFolder {
     Write-DecryptLog "If you see errors, you may not have the EFS certificate" -Level Info
 }
 
-function Decrypt-ArchiveFile {
+function Unprotect-ArchiveFile {
     param([string]$ArchivePath, [string]$Destination)
 
     if (-not (Test-Path $ArchivePath)) {
@@ -202,7 +202,7 @@ function Decrypt-ArchiveFile {
     }
 }
 
-function Decrypt-KeyVaultFiles {
+function Unprotect-KeyVaultFiles {
     param([string]$EncryptedFolder, [string]$Destination)
 
     Write-DecryptLog "Decrypting Azure Key Vault encrypted files..." -Level Info

@@ -386,7 +386,7 @@ function Get-PrivilegedAccounts {
                 }
             }
             catch {
-                Write-ModuleLog "Failed to query group $groupName: $_" -Level Warning
+                Write-ModuleLog "Failed to query group $groupName$($_ | Out-String)" -Level Warning
             }
         }
         
@@ -400,6 +400,663 @@ function Get-PrivilegedAccounts {
     }
     catch {
         Write-ModuleLog "Failed to collect privileged accounts: $_" -Level Error
+        return $null
+    }
+}
+
+#endregion
+
+#region Advanced AD Security Components
+
+function Get-ACLAnalysis {
+    <#
+    .SYNOPSIS
+        Analyzes NTFS permissions and dangerous ACEs in Active Directory
+    #>
+    [CmdletBinding()]
+    param()
+    
+    Write-ModuleLog "Analyzing AD ACLs and permissions..." -Level Info
+    
+    $aclIssues = @()
+    
+    try {
+        # Get all AD objects with ACL issues
+        $searchBase = (Get-ADDomain).DistinguishedName
+        
+        # Analyze critical AD containers
+        $criticalPaths = @(
+            $searchBase,  # Domain root
+            "CN=AdminSDHolder,CN=System,$searchBase",
+            "OU=Domain Controllers,$searchBase",
+            "CN=Users,$searchBase",
+            "CN=Computers,$searchBase"
+        )
+        
+        foreach ($path in $criticalPaths) {
+            try {
+                $acl = Get-Acl -Path "AD:\$path"
+                
+                foreach ($access in $acl.Access) {
+                    # Check for dangerous permissions
+                    $isDangerous = $false
+                    $reason = ""
+                    
+                    # Check for Everyone/Anonymous with dangerous rights
+                    if ($access.IdentityReference -match "Everyone|Anonymous|NT AUTHORITY\\ANONYMOUS LOGON") {
+                        if ($access.ActiveDirectoryRights -match "GenericAll|WriteDacl|WriteOwner|Delete") {
+                            $isDangerous = $true
+                            $reason = "Everyone/Anonymous has dangerous rights"
+                        }
+                    }
+                    
+                    # Check for Authenticated Users with GenericAll
+                    if ($access.IdentityReference -match "Authenticated Users") {
+                        if ($access.ActiveDirectoryRights -match "GenericAll|WriteDacl") {
+                            $isDangerous = $true
+                            $reason = "Authenticated Users has excessive rights"
+                        }
+                    }
+                    
+                    # Check for non-inherited dangerous permissions
+                    if (-not $access.IsInherited -and $access.ActiveDirectoryRights -match "GenericAll|WriteDacl|WriteOwner") {
+                        if ($access.IdentityReference -notmatch "SYSTEM|Domain Admins|Enterprise Admins") {
+                            $isDangerous = $true
+                            $reason = "Non-standard explicit dangerous permission"
+                        }
+                    }
+                    
+                    if ($isDangerous) {
+                        $aclIssues += [PSCustomObject]@{
+                            Path = $path
+                            Identity = $access.IdentityReference
+                            Rights = $access.ActiveDirectoryRights
+                            AccessControlType = $access.AccessControlType
+                            IsInherited = $access.IsInherited
+                            Reason = $reason
+                            Severity = if ($access.IdentityReference -match "Everyone|Anonymous") { "Critical" } else { "High" }
+                        }
+                    }
+                }
+            }
+            catch {
+                Write-ModuleLog "Failed to analyze ACL for $path$($_ | Out-String)" -Level Warning
+            }
+        }
+        
+        # Export results
+        if ($aclIssues.Count -gt 0) {
+            $aclIssues | Export-Csv -Path (Join-Path $script:ADOutputPath "AD_ACL_Issues.csv") -NoTypeInformation
+            Write-ModuleLog "Found $($aclIssues.Count) ACL issues" -Level Warning
+        }
+        else {
+            Write-ModuleLog "No critical ACL issues found" -Level Success
+        }
+        
+        return $aclIssues
+    }
+    catch {
+        Write-ModuleLog "Failed to analyze ACLs$($_ | Out-String)" -Level Error
+        return $null
+    }
+}
+
+function Get-KerberosDelegation {
+    <#
+    .SYNOPSIS
+        Detects accounts configured for Kerberos delegation
+    #>
+    [CmdletBinding()]
+    param()
+    
+    Write-ModuleLog "Detecting Kerberos delegation configurations..." -Level Info
+    
+    $delegationAccounts = @()
+    
+    try {
+        # Find accounts with unconstrained delegation (high risk)
+        $unconstrainedComputers = Get-ADComputer -Filter {TrustedForDelegation -eq $true -and PrimaryGroupID -ne 516} -Properties TrustedForDelegation, ServicePrincipalName, OperatingSystem
+        
+        foreach ($computer in $unconstrainedComputers) {
+            $delegationAccounts += [PSCustomObject]@{
+                ObjectType = "Computer"
+                Name = $computer.Name
+                SAMAccountName = $computer.SAMAccountName
+                DelegationType = "Unconstrained"
+                ServicePrincipalNames = ($computer.ServicePrincipalName -join "; ")
+                OperatingSystem = $computer.OperatingSystem
+                DistinguishedName = $computer.DistinguishedName
+                Severity = "Critical"
+                Recommendation = "Review necessity - unconstrained delegation is high risk"
+            }
+        }
+        
+        # Find user accounts with unconstrained delegation
+        $unconstrainedUsers = Get-ADUser -Filter {TrustedForDelegation -eq $true} -Properties TrustedForDelegation, ServicePrincipalName
+        
+        foreach ($user in $unconstrainedUsers) {
+            $delegationAccounts += [PSCustomObject]@{
+                ObjectType = "User"
+                Name = $user.Name
+                SAMAccountName = $user.SAMAccountName
+                DelegationType = "Unconstrained"
+                ServicePrincipalNames = ($user.ServicePrincipalName -join "; ")
+                OperatingSystem = "N/A"
+                DistinguishedName = $user.DistinguishedName
+                Severity = "Critical"
+                Recommendation = "User accounts should not have unconstrained delegation"
+            }
+        }
+        
+        # Find accounts with constrained delegation
+        $constrainedComputers = Get-ADComputer -Filter {msDS-AllowedToDelegateTo -like "*"} -Properties msDS-AllowedToDelegateTo, ServicePrincipalName, OperatingSystem
+        
+        foreach ($computer in $constrainedComputers) {
+            $delegationAccounts += [PSCustomObject]@{
+                ObjectType = "Computer"
+                Name = $computer.Name
+                SAMAccountName = $computer.SAMAccountName
+                DelegationType = "Constrained"
+                ServicePrincipalNames = ($computer.ServicePrincipalName -join "; ")
+                AllowedToDelegateTo = ($computer.'msDS-AllowedToDelegateTo' -join "; ")
+                OperatingSystem = $computer.OperatingSystem
+                DistinguishedName = $computer.DistinguishedName
+                Severity = "Medium"
+                Recommendation = "Review delegated services for least privilege"
+            }
+        }
+        
+        # Find user accounts with constrained delegation
+        $constrainedUsers = Get-ADUser -Filter {msDS-AllowedToDelegateTo -like "*"} -Properties msDS-AllowedToDelegateTo, ServicePrincipalName
+        
+        foreach ($user in $constrainedUsers) {
+            $delegationAccounts += [PSCustomObject]@{
+                ObjectType = "User"
+                Name = $user.Name
+                SAMAccountName = $user.SAMAccountName
+                DelegationType = "Constrained"
+                ServicePrincipalNames = ($user.ServicePrincipalName -join "; ")
+                AllowedToDelegateTo = ($user.'msDS-AllowedToDelegateTo' -join "; ")
+                OperatingSystem = "N/A"
+                DistinguishedName = $user.DistinguishedName
+                Severity = "Medium"
+                Recommendation = "Review delegated services for least privilege"
+            }
+        }
+        
+        # Export results
+        if ($delegationAccounts.Count -gt 0) {
+            $delegationAccounts | Export-Csv -Path (Join-Path $script:ADOutputPath "AD_Kerberos_Delegation.csv") -NoTypeInformation
+            
+            $criticalCount = ($delegationAccounts | Where-Object Severity -eq "Critical").Count
+            Write-ModuleLog "Found $($delegationAccounts.Count) delegation configurations ($criticalCount critical)" -Level Warning
+        }
+        else {
+            Write-ModuleLog "No Kerberos delegation configurations found" -Level Success
+        }
+        
+        return $delegationAccounts
+    }
+    catch {
+        Write-ModuleLog "Failed to detect Kerberos delegation$($_ | Out-String)" -Level Error
+        return $null
+    }
+}
+
+function Get-DHCPScopeAnalysis {
+    <#
+    .SYNOPSIS
+        Analyzes DHCP scopes and configurations
+    #>
+    [CmdletBinding()]
+    param()
+    
+    Write-ModuleLog "Analyzing DHCP scopes..." -Level Info
+    
+    $dhcpData = @{
+        Servers = @()
+        Scopes = @()
+        Leases = @()
+    }
+    
+    try {
+        # Find DHCP servers in AD
+        $dhcpServers = Get-DhcpServerInDC -ErrorAction Stop
+        
+        foreach ($dhcpServer in $dhcpServers) {
+            try {
+                $serverName = $dhcpServer.DnsName
+                
+                # Get server info
+                $dhcpData.Servers += [PSCustomObject]@{
+                    ServerName = $serverName
+                    IPAddress = $dhcpServer.IPAddress
+                    Status = "Active"
+                }
+                
+                # Get scopes from this server
+                $scopes = Get-DhcpServerv4Scope -ComputerName $serverName -ErrorAction SilentlyContinue
+                
+                foreach ($scope in $scopes) {
+                    # Get scope statistics
+                    $scopeStats = Get-DhcpServerv4ScopeStatistics -ComputerName $serverName -ScopeId $scope.ScopeId -ErrorAction SilentlyContinue
+                    
+                    $dhcpData.Scopes += [PSCustomObject]@{
+                        ServerName = $serverName
+                        ScopeId = $scope.ScopeId
+                        ScopeName = $scope.Name
+                        SubnetMask = $scope.SubnetMask
+                        StartRange = $scope.StartRange
+                        EndRange = $scope.EndRange
+                        LeaseDuration = $scope.LeaseDuration
+                        State = $scope.State
+                        AddressesInUse = $scopeStats.AddressesInUse
+                        AddressesFree = $scopeStats.AddressesFree
+                        PercentageInUse = $scopeStats.PercentageInUse
+                        TotalAddresses = ($scopeStats.AddressesInUse + $scopeStats.AddressesFree)
+                    }
+                    
+                    # Get active leases (limited to first 100 per scope for performance)
+                    $leases = Get-DhcpServerv4Lease -ComputerName $serverName -ScopeId $scope.ScopeId -ErrorAction SilentlyContinue | Select-Object -First 100
+                    
+                    foreach ($lease in $leases) {
+                        $dhcpData.Leases += [PSCustomObject]@{
+                            ServerName = $serverName
+                            ScopeId = $scope.ScopeId
+                            IPAddress = $lease.IPAddress
+                            HostName = $lease.HostName
+                            ClientId = $lease.ClientId
+                            LeaseExpiryTime = $lease.LeaseExpiryTime
+                            AddressState = $lease.AddressState
+                        }
+                    }
+                }
+                
+                Write-ModuleLog "Collected DHCP data from $serverName ($($scopes.Count) scopes)" -Level Success
+            }
+            catch {
+                Write-ModuleLog "Failed to query DHCP server $($serverName)$($_ | Out-String)" -Level Warning
+            }
+        }
+        
+        # Export results
+        if ($dhcpData.Servers.Count -gt 0) {
+            $dhcpData.Servers | Export-Csv -Path (Join-Path $script:ADOutputPath "AD_DHCP_Servers.csv") -NoTypeInformation
+            $dhcpData.Scopes | Export-Csv -Path (Join-Path $script:ADOutputPath "AD_DHCP_Scopes.csv") -NoTypeInformation
+            $dhcpData.Leases | Export-Csv -Path (Join-Path $script:ADOutputPath "AD_DHCP_Leases.csv") -NoTypeInformation
+            
+            Write-ModuleLog "Found $($dhcpData.Servers.Count) DHCP servers with $($dhcpData.Scopes.Count) scopes" -Level Success
+        }
+        else {
+            Write-ModuleLog "No DHCP servers found in AD" -Level Info
+        }
+        
+        return $dhcpData
+    }
+    catch {
+        Write-ModuleLog "DHCP module not available or no DHCP servers in AD$($_ | Out-String)" -Level Warning
+        return $null
+    }
+}
+
+function Get-GPOInventory {
+    <#
+    .SYNOPSIS
+        Comprehensive Group Policy Object inventory and analysis
+    #>
+    [CmdletBinding()]
+    param()
+    
+    Write-ModuleLog "Collecting comprehensive GPO inventory..." -Level Info
+    
+    $gpoData = @()
+    
+    try {
+        Import-Module GroupPolicy -ErrorAction Stop
+        
+        $allGPOs = Get-GPO -All
+        
+        foreach ($gpo in $allGPOs) {
+            try {
+                # Parse links
+                $links = (Get-GPO -Guid $gpo.Id).GpoLinks | ForEach-Object {
+                    $_.Target
+                }
+                
+                $gpoData += [PSCustomObject]@{
+                    DisplayName = $gpo.DisplayName
+                    Id = $gpo.Id
+                    GpoStatus = $gpo.GpoStatus
+                    CreationTime = $gpo.CreationTime
+                    ModificationTime = $gpo.ModificationTime
+                    UserVersion = $gpo.User.DSVersion
+                    ComputerVersion = $gpo.Computer.DSVersion
+                    WmiFilterName = if ($gpo.WmiFilter) { $gpo.WmiFilter.Name } else { "None" }
+                    LinksCount = $links.Count
+                    LinkedOUs = ($links -join "; ")
+                    Owner = $gpo.Owner
+                }
+            }
+            catch {
+                Write-ModuleLog "Failed to process GPO $($gpo.DisplayName)$($_ | Out-String)" -Level Warning
+            }
+        }
+        
+        # Export results
+        if ($gpoData.Count -gt 0) {
+            $gpoData | Export-Csv -Path (Join-Path $script:ADOutputPath "AD_GPO_Inventory.csv") -NoTypeInformation
+            Write-ModuleLog "Collected $($gpoData.Count) GPOs" -Level Success
+        }
+        
+        return $gpoData
+    }
+    catch {
+        Write-ModuleLog "Failed to collect GPO inventory (GroupPolicy module required)$($_ | Out-String)" -Level Error
+        return $null
+    }
+}
+
+function Get-ServiceAccounts {
+    <#
+    .SYNOPSIS
+        Identifies service accounts and analyzes their security posture
+    #>
+    [CmdletBinding()]
+    param()
+    
+    Write-ModuleLog "Identifying service accounts..." -Level Info
+    
+    $serviceAccounts = @()
+    
+    try {
+        # Find accounts with SPNs (likely service accounts)
+        $spnAccounts = Get-ADUser -Filter {ServicePrincipalName -like "*"} -Properties ServicePrincipalName, PasswordLastSet, PasswordNeverExpires, Enabled, LastLogonDate, AdminCount
+        
+        foreach ($account in $spnAccounts) {
+            $passwordAge = if ($account.PasswordLastSet) {
+                (New-TimeSpan -Start $account.PasswordLastSet -End (Get-Date)).Days
+            } else { 999 }
+            
+            $serviceAccounts += [PSCustomObject]@{
+                Name = $account.Name
+                SAMAccountName = $account.SAMAccountName
+                Enabled = $account.Enabled
+                ServicePrincipalNames = ($account.ServicePrincipalName -join "; ")
+                PasswordLastSet = $account.PasswordLastSet
+                PasswordAgeDays = $passwordAge
+                PasswordNeverExpires = $account.PasswordNeverExpires
+                LastLogon = $account.LastLogonDate
+                IsPrivileged = ($account.AdminCount -eq 1)
+                DistinguishedName = $account.DistinguishedName
+                SecurityRisk = if ($account.PasswordNeverExpires -or $passwordAge -gt 180) { "High" } elseif ($passwordAge -gt 90) { "Medium" } else { "Low" }
+            }
+        }
+        
+        # Export results
+        if ($serviceAccounts.Count -gt 0) {
+            $serviceAccounts | Export-Csv -Path (Join-Path $script:ADOutputPath "AD_Service_Accounts.csv") -NoTypeInformation
+            
+            $highRisk = ($serviceAccounts | Where-Object SecurityRisk -eq "High").Count
+            Write-ModuleLog "Found $($serviceAccounts.Count) service accounts ($highRisk high risk)" -Level Success
+        }
+        else {
+            Write-ModuleLog "No service accounts with SPNs found" -Level Info
+        }
+        
+        return $serviceAccounts
+    }
+    catch {
+        Write-ModuleLog "Failed to identify service accounts$($_ | Out-String)" -Level Error
+        return $null
+    }
+}
+
+function Get-ADTrustRelationships {
+    <#
+    .SYNOPSIS
+        Analyzes Active Directory trust relationships
+    #>
+    [CmdletBinding()]
+    param()
+    
+    Write-ModuleLog "Analyzing AD trust relationships..." -Level Info
+    
+    $trusts = @()
+    
+    try {
+        $domainTrusts = Get-ADTrust -Filter *
+        
+        foreach ($trust in $domainTrusts) {
+            $trusts += [PSCustomObject]@{
+                Name = $trust.Name
+                Direction = $trust.Direction
+                TrustType = $trust.TrustType
+                TrustAttributes = $trust.TrustAttributes
+                Source = $trust.Source
+                Target = $trust.Target
+                ForestTransitive = $trust.ForestTransitive
+                SelectiveAuthentication = $trust.SelectiveAuthenticationEnabled
+                SIDFilteringEnabled = $trust.SIDFilteringQuarantined
+                Created = $trust.Created
+                Modified = $trust.Modified
+                SecurityLevel = if ($trust.Direction -eq "Bidirectional" -and -not $trust.SelectiveAuthenticationEnabled) { "Review Required" } else { "Normal" }
+            }
+        }
+        
+        # Export results
+        if ($trusts.Count -gt 0) {
+            $trusts | Export-Csv -Path (Join-Path $script:ADOutputPath "AD_Trusts.csv") -NoTypeInformation
+            Write-ModuleLog "Found $($trusts.Count) trust relationships" -Level Success
+        }
+        else {
+            Write-ModuleLog "No trust relationships found" -Level Info
+        }
+        
+        return $trusts
+    }
+    catch {
+        Write-ModuleLog "Failed to analyze trust relationships$($_ | Out-String)" -Level Error
+        return $null
+    }
+}
+
+function Get-PasswordPolicies {
+    <#
+    .SYNOPSIS
+        Analyzes domain and fine-grained password policies
+    #>
+    [CmdletBinding()]
+    param()
+    
+    Write-ModuleLog "Analyzing password policies..." -Level Info
+    
+    $policies = @{
+        DefaultPolicy = $null
+        FineGrainedPolicies = @()
+    }
+    
+    try {
+        # Get default domain password policy
+        $defaultPolicy = Get-ADDefaultDomainPasswordPolicy
+        
+        $policies.DefaultPolicy = [PSCustomObject]@{
+            PolicyType = "Default Domain Policy"
+            ComplexityEnabled = $defaultPolicy.ComplexityEnabled
+            LockoutDuration = $defaultPolicy.LockoutDuration
+            LockoutObservationWindow = $defaultPolicy.LockoutObservationWindow
+            LockoutThreshold = $defaultPolicy.LockoutThreshold
+            MaxPasswordAge = $defaultPolicy.MaxPasswordAge
+            MinPasswordAge = $defaultPolicy.MinPasswordAge
+            MinPasswordLength = $defaultPolicy.MinPasswordLength
+            PasswordHistoryCount = $defaultPolicy.PasswordHistoryCount
+            ReversibleEncryptionEnabled = $defaultPolicy.ReversibleEncryptionEnabled
+            SecurityAssessment = if ($defaultPolicy.MinPasswordLength -lt 12 -or -not $defaultPolicy.ComplexityEnabled) { "Weak" } else { "Adequate" }
+        }
+        
+        # Get fine-grained password policies (PSOs)
+        $fgPolicies = Get-ADFineGrainedPasswordPolicy -Filter * -ErrorAction SilentlyContinue
+        
+        foreach ($policy in $fgPolicies) {
+            $policies.FineGrainedPolicies += [PSCustomObject]@{
+                Name = $policy.Name
+                Precedence = $policy.Precedence
+                AppliesTo = ($policy.AppliesTo -join "; ")
+                ComplexityEnabled = $policy.ComplexityEnabled
+                LockoutDuration = $policy.LockoutDuration
+                LockoutThreshold = $policy.LockoutThreshold
+                MaxPasswordAge = $policy.MaxPasswordAge
+                MinPasswordLength = $policy.MinPasswordLength
+                PasswordHistoryCount = $policy.PasswordHistoryCount
+                ReversibleEncryptionEnabled = $policy.ReversibleEncryptionEnabled
+            }
+        }
+        
+        # Export results
+        $policies.DefaultPolicy | Export-Csv -Path (Join-Path $script:ADOutputPath "AD_Password_Policy_Default.csv") -NoTypeInformation
+        
+        if ($policies.FineGrainedPolicies.Count -gt 0) {
+            $policies.FineGrainedPolicies | Export-Csv -Path (Join-Path $script:ADOutputPath "AD_Password_Policies_FineGrained.csv") -NoTypeInformation
+            Write-ModuleLog "Found $($policies.FineGrainedPolicies.Count) fine-grained password policies" -Level Success
+        }
+        
+        Write-ModuleLog "Password policy analysis complete" -Level Success
+        return $policies
+    }
+    catch {
+        Write-ModuleLog "Failed to analyze password policies$($_ | Out-String)" -Level Error
+        return $null
+    }
+}
+
+function Get-DNSZoneInventory {
+    <#
+    .SYNOPSIS
+        Analyzes DNS zones and configurations
+    #>
+    [CmdletBinding()]
+    param()
+    
+    Write-ModuleLog "Analyzing DNS zones..." -Level Info
+    
+    $dnsData = @{
+        Zones = @()
+        Records = @()
+    }
+    
+    try {
+        # Get DNS server (use domain's DNS servers)
+        $domain = Get-ADDomain
+        $dnsServer = $domain.PDCEmulator
+        
+        # Get DNS zones
+        $zones = Get-DnsServerZone -ComputerName $dnsServer -ErrorAction Stop
+        
+        foreach ($zone in $zones) {
+            $dnsData.Zones += [PSCustomObject]@{
+                ZoneName = $zone.ZoneName
+                ZoneType = $zone.ZoneType
+                DynamicUpdate = $zone.DynamicUpdate
+                IsAutoCreated = $zone.IsAutoCreated
+                IsDsIntegrated = $zone.IsDsIntegrated
+                IsReverseLookupZone = $zone.IsReverseLookupZone
+                IsSigned = $zone.IsSigned
+                SecureSecondaries = $zone.SecureSecondaries
+            }
+            
+            # Get sample records from each zone (first 100 for performance)
+            try {
+                $records = Get-DnsServerResourceRecord -ComputerName $dnsServer -ZoneName $zone.ZoneName -ErrorAction SilentlyContinue | Select-Object -First 100
+                
+                foreach ($record in $records) {
+                    $dnsData.Records += [PSCustomObject]@{
+                        ZoneName = $zone.ZoneName
+                        HostName = $record.HostName
+                        RecordType = $record.RecordType
+                        RecordData = $record.RecordData.IPv4Address -join ", "
+                        TimeStamp = $record.Timestamp
+                        TimeToLive = $record.TimeToLive
+                    }
+                }
+            }
+            catch {
+                Write-ModuleLog "Failed to get records from zone $($zone.ZoneName)$($_ | Out-String)" -Level Warning
+            }
+        }
+        
+        # Export results
+        if ($dnsData.Zones.Count -gt 0) {
+            $dnsData.Zones | Export-Csv -Path (Join-Path $script:ADOutputPath "AD_DNS_Zones.csv") -NoTypeInformation
+            $dnsData.Records | Export-Csv -Path (Join-Path $script:ADOutputPath "AD_DNS_Records_Sample.csv") -NoTypeInformation
+            Write-ModuleLog "Found $($dnsData.Zones.Count) DNS zones" -Level Success
+        }
+        
+        return $dnsData
+    }
+    catch {
+        Write-ModuleLog "DNS module not available or failed to query$($_ | Out-String)" -Level Warning
+        return $null
+    }
+}
+
+function Get-CertificateServices {
+    <#
+    .SYNOPSIS
+        Audits Active Directory Certificate Services if available
+    #>
+    [CmdletBinding()]
+    param()
+    
+    Write-ModuleLog "Analyzing Certificate Services..." -Level Info
+    
+    $certData = @{
+        CertificationAuthorities = @()
+        Templates = @()
+    }
+    
+    try {
+        # Check if ADCS is installed
+        $configNC = (Get-ADRootDSE).configurationNamingContext
+        
+        # Find Certificate Authority objects
+        $caObjects = Get-ADObject -Filter {objectClass -eq "pKIEnrollmentService"} -SearchBase $configNC -Properties *
+        
+        foreach ($ca in $caObjects) {
+            $certData.CertificationAuthorities += [PSCustomObject]@{
+                Name = $ca.Name
+                DisplayName = $ca.displayName
+                DNSHostName = $ca.dNSHostName
+                CACertificate = if ($ca.cACertificate) { "Present" } else { "Missing" }
+                DistinguishedName = $ca.DistinguishedName
+            }
+        }
+        
+        # Get certificate templates
+        $templates = Get-ADObject -Filter {objectClass -eq "pKICertificateTemplate"} -SearchBase $configNC -Properties *
+        
+        foreach ($template in $templates) {
+            $certData.Templates += [PSCustomObject]@{
+                Name = $template.Name
+                DisplayName = $template.displayName
+                Created = $template.Created
+                Modified = $template.Modified
+                DistinguishedName = $template.DistinguishedName
+            }
+        }
+        
+        # Export results
+        if ($certData.CertificationAuthorities.Count -gt 0) {
+            $certData.CertificationAuthorities | Export-Csv -Path (Join-Path $script:ADOutputPath "AD_Certificate_Authorities.csv") -NoTypeInformation
+            $certData.Templates | Export-Csv -Path (Join-Path $script:ADOutputPath "AD_Certificate_Templates.csv") -NoTypeInformation
+            Write-ModuleLog "Found $($certData.CertificationAuthorities.Count) Certificate Authorities with $($certData.Templates.Count) templates" -Level Success
+        }
+        else {
+            Write-ModuleLog "No Certificate Services found in AD" -Level Info
+        }
+        
+        return $certData
+    }
+    catch {
+        Write-ModuleLog "Failed to analyze Certificate Services$($_ | Out-String)" -Level Warning
         return $null
     }
 }
@@ -576,7 +1233,7 @@ function Get-ServerStorageInventory {
     $Servers | ForEach-Object -ThrottleLimit $MaxParallel -Parallel {
         $server = $_
         $serverName = $server.ServerName
-        $resultBag = $using:storageResults
+        $storageBag = $using:storageResults
         
         try {
             $sessionOption = New-CimSessionOption -Protocol Dcom
@@ -586,7 +1243,7 @@ function Get-ServerStorageInventory {
                 $disks = Get-CimInstance -CimSession $cimSession -ClassName Win32_LogicalDisk -Filter "DriveType=3" -ErrorAction Stop
                 
                 foreach ($disk in $disks) {
-                    $storageResults.Add([PSCustomObject]@{
+                    $storageBag.Add([PSCustomObject]@{
                         ServerName = $serverName
                         DriveLetter = $disk.DeviceID
                         VolumeName = $disk.VolumeName
@@ -603,7 +1260,7 @@ function Get-ServerStorageInventory {
             }
         }
         catch {
-            Write-Verbose "Failed to collect storage from $serverName: $_"
+            Write-Verbose "Failed to collect storage from $($serverName): $($_.Exception.Message)"
         }
     }
     
@@ -677,7 +1334,7 @@ function Get-ServerApplications {
             }
         }
         catch {
-            Write-Verbose "Failed to collect applications from $serverName: $_"
+            Write-Verbose "Failed to collect applications from $($serverName): $($_.Exception.Message)"
         }
     }
     
@@ -756,8 +1413,8 @@ function Get-ServerEventLogs {
                                  }
                              }}
             
-            foreach ($event in $criticals) {
-                $criticalBag.Add($event)
+            foreach ($logEvent in $criticals) {
+                $criticalBag.Add($logEvent)
             }
             
             # Query Error events
@@ -785,14 +1442,14 @@ function Get-ServerEventLogs {
                                  }
                              }}
             
-            foreach ($event in $errors) {
-                $errorBag.Add($event)
+            foreach ($logEvent in $errors) {
+                $errorBag.Add($logEvent)
             }
             
             Write-Verbose "Collected event logs from $serverName"
         }
         catch {
-            Write-Verbose "Failed to collect event logs from $serverName: $_"
+            Write-Verbose "Failed to collect event logs from $($serverName): $($_.Exception.Message)"
         }
     }
     
@@ -926,7 +1583,7 @@ function Get-ServerLogonHistory {
             Write-Verbose "Collected logon history from $serverName"
         }
         catch {
-            Write-Verbose "Failed to collect logon history from $serverName: $_"
+            Write-Verbose "Failed to collect logon history from $($serverName): $($_.Exception.Message)"
         }
     }
     
@@ -972,15 +1629,20 @@ try {
     # Collect privileged accounts
     $privilegedAccounts = Get-PrivilegedAccounts
     
-    # TODO: Implement remaining AD audit components:
-    # - GPO inventory
-    # - Service accounts
-    # - Trusts
-    # - ACL analysis
-    # - Password policies
-    # - Kerberos delegation
-    # - DNS zones
-    # - DHCP scopes
+    # Advanced AD Security Components
+    Write-ModuleLog "Collecting advanced AD security components..." -Level Info
+    
+    Get-ACLAnalysis | Out-Null
+    Get-KerberosDelegation | Out-Null
+    Get-DHCPScopeAnalysis | Out-Null
+    Get-GPOInventory | Out-Null
+    Get-ServiceAccounts | Out-Null
+    Get-ADTrustRelationships | Out-Null
+    Get-PasswordPolicies | Out-Null
+    Get-DNSZoneInventory | Out-Null
+    Get-CertificateServices | Out-Null
+    
+    Write-ModuleLog "Advanced AD security component collection complete" -Level Success
     
     # Server Inventory (if enabled)
     if ($ServerInventory -and $memberServers) {
@@ -1001,10 +1663,10 @@ try {
         }
         else {
             # Step 2: Storage inventory
-            $storage = Get-ServerStorageInventory -Servers $onlineServers -MaxParallel $MaxParallelServers
+            Get-ServerStorageInventory -Servers $onlineServers -MaxParallel $MaxParallelServers | Out-Null
             
             # Step 3: Installed applications
-            $applications = Get-ServerApplications -Servers $onlineServers -MaxParallel $MaxParallelServers
+            Get-ServerApplications -Servers $onlineServers -MaxParallel $MaxParallelServers | Out-Null
             
             # Step 4: Event logs (if not skipped)
             if (-not $SkipEventLogs) {

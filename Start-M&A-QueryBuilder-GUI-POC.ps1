@@ -126,7 +126,7 @@ function Build-SQLQuery {
     return $query
 }
 
-function Execute-Query {
+function Invoke-DatabaseQuery {
     <#
     .SYNOPSIS
         Executes SQL query and returns results as DataTable
@@ -384,7 +384,7 @@ $executeButton.Add_Click({
     $sqlTextBox.Text = $query
     
     # Execute and display results (POC - would show in DataGridView)
-    $results = Execute-Query -Connection $script:DatabaseConnection -Query $query
+    $results = Invoke-DatabaseQuery -Connection $script:DatabaseConnection -Query $query
     
     if ($results) {
         $rowCount = $results.Rows.Count

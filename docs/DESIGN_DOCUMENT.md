@@ -4,6 +4,7 @@
 
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
+| 2.1 | October 22, 2025 | Adrian Johnson | Added 9 advanced AD security components: ACL Analysis, Kerberos Delegation Detection, DHCP Scope Analysis, Comprehensive GPO Inventory, Service Account Analysis, AD Trust Relationships, Password Policies (default + fine-grained), DNS Zone Inventory, and Certificate Services Audit. All linter errors resolved, comprehensive test coverage added (118+ tests). |
 | 2.0 | October 20, 2025 | Adrian Johnson | Major revision: Added hybrid identity architecture, DNS/network dependencies, compliance module, Power Platform details, data security plan, validation framework, comprehensive gotchas section, detailed server hardware inventory with event logs and logon history, and comprehensive SQL Server database inventory. |
 | 1.9 | October 20, 2025 | Adrian Johnson | Added AD ACL analysis for high-value objects to detect dangerous, non-default permissions. |
 | 1.8 | October 20, 2025 | Adrian Johnson | Added inventory of default AD groups and a text-based export of the domain/OU tree structure. |
