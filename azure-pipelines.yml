@@ -62,7 +62,7 @@ stages:
                 exit 1
               }
             displayName: 'Run Pester Tests'
-            continueOnError: false
+            continueOnError: 'false'
           
           - task: PublishTestResults@2
             displayName: 'Publish Test Results'
@@ -75,14 +75,16 @@ stages:
               testRunTitle: 'Pester Tests'
               failTaskOnFailedTests: true
           
-          - task: PublishCodeCoverageResults@1
-            displayName: 'Publish Code Coverage'
-            condition: always()
-            inputs:
-              codeCoverageTool: 'JaCoCo'
-              summaryFileLocation: '$(System.DefaultWorkingDirectory)/Tests/coverage.xml'
-              reportDirectory: '$(System.DefaultWorkingDirectory)/Tests/TestResults'
-              failIfCoverageEmpty: false
+          # Note: PublishCodeCoverageResults@1 is deprecated by Azure DevOps
+          # Enable if code coverage publishing is required (task still functional)
+          # - task: PublishCodeCoverageResults@1
+          #   displayName: 'Publish Code Coverage'
+          #   condition: always()
+          #   inputs:
+          #     codeCoverageTool: 'JaCoCo'
+          #     summaryFileLocation: '$(System.DefaultWorkingDirectory)/Tests/coverage.xml'
+          #     reportDirectory: '$(System.DefaultWorkingDirectory)/Tests/TestResults'
+          #     failIfCoverageEmpty: false
           
           - pwsh: |
               Write-Host "Test Summary:" -ForegroundColor Cyan
@@ -139,7 +141,7 @@ stages:
                 Write-Host "##vso[task.setvariable variable=LintWarnings]0"
               }
             displayName: 'Run Script Analyzer'
-            continueOnError: false
+            continueOnError: 'false'
 
   - stage: Package
     displayName: 'Package Stage'
