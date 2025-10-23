@@ -26,6 +26,7 @@ This directory contains comprehensive documentation for the M&A Technical Discov
 |----------|-------------|----------|
 | [Design Document](DESIGN_DOCUMENT.md) | Architecture and technical design | Architects, Developers |
 | [Development Progress](DEVELOPMENT_PROGRESS.md) | Build history and features | Project Stakeholders |
+| [AD Performance Tuning Guide](AD_PERFORMANCE_TUNING_GUIDE.md) | Microsoft AD performance optimization | Performance Engineers, Architects |
 
 ---
 
@@ -41,7 +42,8 @@ This directory contains comprehensive documentation for the M&A Technical Discov
 
 ### **I'm a Developer/Engineer**
 👉 Review [Design Document](DESIGN_DOCUMENT.md)  
-📚 Reference [Module Reference](MODULE_REFERENCE.md)
+📚 Reference [Module Reference](MODULE_REFERENCE.md)  
+⚡ Check [AD Performance Tuning Guide](AD_PERFORMANCE_TUNING_GUIDE.md)
 
 ### **I'm a Project Manager/Executive**
 👉 Read [Development Progress](DEVELOPMENT_PROGRESS.md)  
