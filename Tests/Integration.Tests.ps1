@@ -50,6 +50,7 @@ Describe "End-to-End Workflow Tests" -Tag "Integration" {
                     Department = 'IT'
                     Title = 'Engineer'
                     Manager = 'CN=Boss,DC=test,DC=com'
+                    IsStale = 'False'
                 }
             )
             
@@ -69,11 +70,6 @@ Describe "End-to-End Workflow Tests" -Tag "Integration" {
                 Manager = 'Manager'
             }
             
-            # Add IsStale calculation
-            $testUsers | ForEach-Object {
-                $days = $_.DaysSinceLastLogon
-                $_.IsStale = if ($days -ne 'Never' -and [int]$days -gt 90) { 'True' } else { 'False' }
-            }
             $mapping.IsStale = 'IsStale'
             
             # Import data
