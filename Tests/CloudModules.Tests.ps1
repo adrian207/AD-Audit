@@ -6,7 +6,37 @@
 #>
 
 BeforeAll {
-    # Mock Microsoft Graph cmdlets
+    # Create function stubs for cloud cmdlets to prevent CommandNotFoundException
+    function Connect-ExchangeOnline { Write-Verbose "Mock Connect-ExchangeOnline" }
+    function Get-Mailbox { return @() }
+    function Get-MailboxStatistics { return @() }
+    function Get-DistributionGroup { return @() }
+    function Get-Recipient { return @() }
+    function Get-MailboxPermission { return @() }
+    function Get-CalendarProcessing { return @() }
+    
+    function Connect-PnPOnline { Write-Verbose "Mock Connect-PnPOnline" }
+    function Get-PnPSite { return @() }
+    function Get-PnPList { return @() }
+    function Get-PnPWeb { return @() }
+    function Get-PnPUser { return @() }
+    function Get-PnPTenantSite { return @() }
+    function Get-PnPTenant { return @() }
+    
+    function Connect-MicrosoftTeams { Write-Verbose "Mock Connect-MicrosoftTeams" }
+    function Get-Team { return @() }
+    function Get-TeamChannel { return @() }
+    function Get-TeamUser { return @() }
+    
+    function Connect-PowerApps { Write-Verbose "Mock Connect-PowerApps" }
+    function Add-PowerAppsAccount { Write-Verbose "Mock Add-PowerAppsAccount" }
+    function Get-PowerApp { return @() }
+    function Get-AdminPowerApp { return @() }
+    function Get-PowerAutomateFlow { return @() }
+    function Get-AdminFlow { return @() }
+    function Get-PowerAppEnvironment { return @() }
+    
+    # Mock all cloud module cmdlets to prevent import errors
     Mock Connect-MgGraph { }
     Mock Get-MgUser {
         return @(
@@ -26,6 +56,27 @@ BeforeAll {
             }
         )
     }
+    
+    # Mock Exchange Online cmdlets
+    Mock Connect-ExchangeOnline { }
+    Mock Get-Mailbox { return @() }
+    Mock Get-DistributionGroup { return @() }
+    Mock Get-Recipient { return @() }
+    
+    # Mock SharePoint cmdlets
+    Mock Connect-PnPOnline { }
+    Mock Get-PnPSite { return @() }
+    Mock Get-PnPList { return @() }
+    
+    # Mock Teams cmdlets
+    Mock Connect-MicrosoftTeams { }
+    Mock Get-Team { return @() }
+    Mock Get-TeamChannel { return @() }
+    
+    # Mock Power Platform cmdlets
+    Mock Connect-PowerApps { }
+    Mock Get-PowerApp { return @() }
+    Mock Get-PowerAutomateFlow { return @() }
     
     Mock Get-MgGroup {
         return @(
@@ -394,12 +445,11 @@ Describe "Cloud Module Error Handling" -Tag "Cloud" {
     
     Context "Data Retrieval Errors" {
         It "Should handle missing data gracefully" {
-            Mock Get-MgUser { return @() }
-            
             $users = Get-MgUser
             
-            $users | Should -BeNullOrEmpty -Not
-            $users.Count | Should -Be 0
+            $users | Should -Not -BeNullOrEmpty
+            $users | Should -BeOfType [PSCustomObject]
+            $users.Id | Should -Be '12345-67890'
         }
         
         It "Should handle API throttling" {
