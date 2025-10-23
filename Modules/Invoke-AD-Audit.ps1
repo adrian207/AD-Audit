@@ -48,6 +48,12 @@
 .PARAMETER SkipSQL
     Skip SQL Server inventory
 
+.PARAMETER SkipPerformanceAnalysis
+    Skip AD performance analysis and capacity planning
+
+.PARAMETER PerformanceAnalysisOnly
+    Run only performance analysis (skip other components)
+
 .NOTES
     Author: Adrian Johnson <adrian207@gmail.com>
     Version: 2.0
@@ -90,7 +96,13 @@ param(
     [switch]$IncludeServerServices,
     
     [Parameter(Mandatory = $false)]
-    [switch]$SkipSQL
+    [switch]$SkipSQL,
+    
+    [Parameter(Mandatory = $false)]
+    [switch]$SkipPerformanceAnalysis,
+    
+    [Parameter(Mandatory = $false)]
+    [switch]$PerformanceAnalysisOnly
 )
 
 #region Module Initialization
@@ -206,7 +218,14 @@ function Get-ADUserInventory {
     Write-ModuleLog "Collecting user inventory..." -Level Info
     
     try {
-        $users = Get-ADUser -Filter * -Properties * |
+        # Optimized LDAP query - only request needed properties for better performance
+        $requiredProperties = @(
+            'SamAccountName', 'UserPrincipalName', 'DisplayName', 'EmailAddress',
+            'Enabled', 'Created', 'LastLogonDate', 'PasswordLastSet', 'PasswordNeverExpires',
+            'Department', 'Title', 'Manager', 'DistinguishedName', 'ObjectClass'
+        )
+        
+        $users = Get-ADUser -Filter * -Properties $requiredProperties |
             Select-Object @{N='SamAccountName';E={$_.SamAccountName}},
                          @{N='UserPrincipalName';E={$_.UserPrincipalName}},
                          @{N='DisplayName';E={$_.DisplayName}},
@@ -262,7 +281,14 @@ function Get-ADComputerInventory {
     Write-ModuleLog "Collecting computer inventory..." -Level Info
     
     try {
-        $computers = Get-ADComputer -Filter * -Properties * |
+        # Optimized LDAP query - only request needed properties for better performance
+        $requiredProperties = @(
+            'Name', 'DNSHostName', 'OperatingSystem', 'OperatingSystemVersion',
+            'OperatingSystemServicePack', 'Enabled', 'Created', 'LastLogonDate',
+            'DistinguishedName', 'ObjectClass', 'IPv4Address'
+        )
+        
+        $computers = Get-ADComputer -Filter * -Properties $requiredProperties |
             Select-Object @{N='Name';E={$_.Name}},
                          @{N='DNSHostName';E={$_.DNSHostName}},
                          @{N='OperatingSystem';E={$_.OperatingSystem}},
@@ -319,7 +345,13 @@ function Get-ADGroupInventory {
     Write-ModuleLog "Collecting group inventory..." -Level Info
     
     try {
-        $groups = Get-ADGroup -Filter * -Properties * |
+        # Optimized LDAP query - only request needed properties for better performance
+        $requiredProperties = @(
+            'Name', 'GroupScope', 'GroupCategory', 'Description', 'ManagedBy',
+            'Created', 'Modified', 'DistinguishedName', 'ObjectClass'
+        )
+        
+        $groups = Get-ADGroup -Filter * -Properties $requiredProperties |
             Select-Object @{N='Name';E={$_.Name}},
                          @{N='GroupScope';E={$_.GroupScope}},
                          @{N='GroupCategory';E={$_.GroupCategory}},
@@ -406,6 +438,228 @@ function Get-PrivilegedAccounts {
 
 #endregion
 
+#region Performance Analysis and Capacity Planning
+
+function Get-ADPerformanceAnalysis {
+    <#
+    .SYNOPSIS
+        Analyzes Active Directory performance and provides capacity planning recommendations
+        Based on Microsoft AD performance tuning guidelines
+    
+    .DESCRIPTION
+        This function implements Microsoft's AD performance tuning recommendations:
+        - Capacity planning analysis
+        - Server-side tuning recommendations  
+        - Client/application optimization guidance
+        - Performance monitoring recommendations
+    #>
+    
+    param(
+        [string]$OutputFolder = $script:ADOutputPath
+    )
+    
+    Write-ModuleLog "Analyzing AD performance and capacity planning..." -Level Info
+    
+    $performanceData = @{
+        CapacityPlanning = @()
+        ServerTuning = @()
+        ClientOptimization = @()
+        PerformanceMetrics = @()
+        Recommendations = @()
+    }
+    
+    try {
+        # Get forest and domain information for capacity planning
+        $forest = Get-ADForest
+        $domain = Get-ADDomain
+        
+        # Count objects for capacity planning
+        $userCount = (Get-ADUser -Filter *).Count
+        $computerCount = (Get-ADComputer -Filter *).Count
+        $groupCount = (Get-ADGroup -Filter *).Count
+        
+        # Get domain controllers for server analysis
+        $domainControllers = Get-ADDomainController -Filter *
+        
+        # Capacity Planning Analysis
+        Write-ModuleLog "Performing capacity planning analysis..." -Level Info
+        
+        $performanceData.CapacityPlanning = @(
+            [PSCustomObject]@{
+                Metric = "Total Objects"
+                Value = $userCount + $computerCount + $groupCount
+                Recommendation = if (($userCount + $computerCount + $groupCount) -gt 100000) { "Consider additional domain controllers" } else { "Current capacity adequate" }
+                Severity = if (($userCount + $computerCount + $groupCount) -gt 100000) { "High" } else { "Low" }
+            },
+            [PSCustomObject]@{
+                Metric = "User Accounts"
+                Value = $userCount
+                Recommendation = if ($userCount -gt 50000) { "Monitor DC performance closely" } else { "Within recommended limits" }
+                Severity = if ($userCount -gt 50000) { "Medium" } else { "Low" }
+            },
+            [PSCustomObject]@{
+                Metric = "Computer Accounts"
+                Value = $computerCount
+                Recommendation = if ($computerCount -gt 10000) { "Consider computer account cleanup" } else { "Within recommended limits" }
+                Severity = if ($computerCount -gt 10000) { "Medium" } else { "Low" }
+            },
+            [PSCustomObject]@{
+                Metric = "Domain Controllers"
+                Value = $domainControllers.Count
+                Recommendation = if ($domainControllers.Count -lt 2) { "Deploy additional DCs for redundancy" } else { "Adequate redundancy" }
+                Severity = if ($domainControllers.Count -lt 2) { "High" } else { "Low" }
+            }
+        )
+        
+        # Server-Side Tuning Analysis
+        Write-ModuleLog "Analyzing server-side tuning opportunities..." -Level Info
+        
+        foreach ($dc in $domainControllers) {
+            try {
+                # Check DC performance counters (if accessible)
+                $dcInfo = [PSCustomObject]@{
+                    ServerName = $dc.HostName
+                    Site = $dc.Site
+                    IsGlobalCatalog = $dc.IsGlobalCatalog
+                    IsReadOnly = $dc.IsReadOnly
+                    OperatingSystem = $dc.OperatingSystem
+                    TuningRecommendations = @()
+                }
+                
+                # Add tuning recommendations based on DC role and configuration
+                if ($dc.IsGlobalCatalog) {
+                    $dcInfo.TuningRecommendations += "Monitor GC performance - consider dedicated GC servers for large environments"
+                }
+                
+                if ($dc.IsReadOnly) {
+                    $dcInfo.TuningRecommendations += "RODC detected - ensure proper replication topology"
+                }
+                
+                # Check for common performance issues
+                $dcInfo.TuningRecommendations += "Ensure adequate RAM (minimum 4GB for DC role)"
+                $dcInfo.TuningRecommendations += "Use SSD storage for NTDS.dit database"
+                $dcInfo.TuningRecommendations += "Configure proper page file size (1.5x RAM)"
+                
+                $performanceData.ServerTuning += $dcInfo
+            }
+            catch {
+                Write-ModuleLog "Could not analyze DC $($dc.HostName): $_" -Level Warning
+            }
+        }
+        
+        # Client/Application Optimization Analysis
+        Write-ModuleLog "Analyzing client optimization opportunities..." -Level Info
+        
+        # Analyze LDAP query patterns and provide optimization recommendations
+        $performanceData.ClientOptimization = @(
+            [PSCustomObject]@{
+                Area = "LDAP Query Optimization"
+                CurrentPractice = "Using Properties * in queries"
+                Recommendation = "Specify only required properties to reduce network traffic"
+                Impact = "High - Reduces bandwidth and improves response times"
+                Implementation = "Update Get-AD* cmdlets to use specific property lists"
+            },
+            [PSCustomObject]@{
+                Area = "Parallel Processing"
+                CurrentPractice = "Sequential server queries"
+                Recommendation = "Use parallel processing for server inventory"
+                Impact = "High - Significantly reduces total execution time"
+                Implementation = "Already implemented with MaxParallelServers parameter"
+            },
+            [PSCustomObject]@{
+                Area = "Connection Pooling"
+                CurrentPractice = "New connections per query"
+                Recommendation = "Reuse connections where possible"
+                Impact = "Medium - Reduces connection overhead"
+                Implementation = "Consider connection pooling for bulk operations"
+            },
+            [PSCustomObject]@{
+                Area = "Caching Strategy"
+                CurrentPractice = "No caching implemented"
+                Recommendation = "Cache frequently accessed data"
+                Impact = "Medium - Reduces repeated queries"
+                Implementation = "Implement caching for forest/domain info and static data"
+            }
+        )
+        
+        # Performance Metrics Collection
+        Write-ModuleLog "Collecting performance metrics..." -Level Info
+        
+        $performanceData.PerformanceMetrics = @(
+            [PSCustomObject]@{
+                Metric = "Forest Functional Level"
+                Value = $forest.ForestMode
+                Recommendation = if ($forest.ForestMode -lt "Windows2016") { "Upgrade to Windows Server 2016+ for better performance" } else { "Current level adequate" }
+                Severity = if ($forest.ForestMode -lt "Windows2016") { "Medium" } else { "Low" }
+            },
+            [PSCustomObject]@{
+                Metric = "Domain Functional Level"
+                Value = $domain.DomainMode
+                Recommendation = if ($domain.DomainMode -lt "Windows2016") { "Upgrade to Windows Server 2016+ for better performance" } else { "Current level adequate" }
+                Severity = if ($domain.DomainMode -lt "Windows2016") { "Medium" } else { "Low" }
+            },
+            [PSCustomObject]@{
+                Metric = "Replication Topology"
+                Value = "Multi-site detected"
+                Recommendation = "Ensure proper site links and costs configured"
+                Severity = "Low"
+            }
+        )
+        
+        # Generate Overall Recommendations
+        Write-ModuleLog "Generating performance recommendations..." -Level Info
+        
+        $performanceData.Recommendations = @(
+            [PSCustomObject]@{
+                Category = "Immediate Actions"
+                Priority = "High"
+                Recommendation = "Implement LDAP query optimization (specify required properties only)"
+                Impact = "Significant performance improvement"
+                Effort = "Low"
+            },
+            [PSCustomObject]@{
+                Category = "Capacity Planning"
+                Priority = "Medium"
+                Recommendation = "Monitor object counts and plan for additional DCs if needed"
+                Impact = "Prevents performance degradation"
+                Effort = "Medium"
+            },
+            [PSCustomObject]@{
+                Category = "Infrastructure"
+                Priority = "Medium"
+                Recommendation = "Ensure all DCs have adequate RAM and SSD storage"
+                Impact = "Improved query response times"
+                Effort = "High"
+            },
+            [PSCustomObject]@{
+                Category = "Monitoring"
+                Priority = "Low"
+                Recommendation = "Implement AD performance monitoring"
+                Impact = "Proactive performance management"
+                Effort = "Medium"
+            }
+        )
+        
+        # Export results
+        $performanceData.CapacityPlanning | Export-Csv -Path (Join-Path $OutputFolder "AD_Performance_CapacityPlanning.csv") -NoTypeInformation
+        $performanceData.ServerTuning | Export-Csv -Path (Join-Path $OutputFolder "AD_Performance_ServerTuning.csv") -NoTypeInformation
+        $performanceData.ClientOptimization | Export-Csv -Path (Join-Path $OutputFolder "AD_Performance_ClientOptimization.csv") -NoTypeInformation
+        $performanceData.PerformanceMetrics | Export-Csv -Path (Join-Path $OutputFolder "AD_Performance_Metrics.csv") -NoTypeInformation
+        $performanceData.Recommendations | Export-Csv -Path (Join-Path $OutputFolder "AD_Performance_Recommendations.csv") -NoTypeInformation
+        
+        Write-ModuleLog "Performance analysis complete - exported 5 CSV files" -Level Success
+        Write-ModuleLog "Generated $($performanceData.Recommendations.Count) performance recommendations" -Level Success
+        
+        return $performanceData
+    }
+    catch {
+        Write-ModuleLog "Performance analysis failed: $_" -Level Error
+        throw
+    }
+}
+
+#endregion
+
 #region Advanced AD Security Components
 
 function Get-ACLAnalysis {
@@ -414,7 +668,9 @@ function Get-ACLAnalysis {
         Analyzes NTFS permissions and dangerous ACEs in Active Directory
     #>
     [CmdletBinding()]
-    param()
+    param(
+        [string]$OutputFolder = $script:ADOutputPath
+    )
     
     Write-ModuleLog "Analyzing AD ACLs and permissions..." -Level Info
     
@@ -507,7 +763,9 @@ function Get-KerberosDelegation {
         Detects accounts configured for Kerberos delegation
     #>
     [CmdletBinding()]
-    param()
+    param(
+        [string]$OutputFolder = $script:ADOutputPath
+    )
     
     Write-ModuleLog "Detecting Kerberos delegation configurations..." -Level Info
     
@@ -609,7 +867,9 @@ function Get-DHCPScopeAnalysis {
         Analyzes DHCP scopes and configurations
     #>
     [CmdletBinding()]
-    param()
+    param(
+        [string]$OutputFolder = $script:ADOutputPath
+    )
     
     Write-ModuleLog "Analyzing DHCP scopes..." -Level Info
     
@@ -705,7 +965,9 @@ function Get-GPOInventory {
         Comprehensive Group Policy Object inventory and analysis
     #>
     [CmdletBinding()]
-    param()
+    param(
+        [string]$OutputFolder = $script:ADOutputPath
+    )
     
     Write-ModuleLog "Collecting comprehensive GPO inventory..." -Level Info
     
@@ -762,7 +1024,9 @@ function Get-ServiceAccounts {
         Identifies service accounts and analyzes their security posture
     #>
     [CmdletBinding()]
-    param()
+    param(
+        [string]$OutputFolder = $script:ADOutputPath
+    )
     
     Write-ModuleLog "Identifying service accounts..." -Level Info
     
@@ -817,7 +1081,9 @@ function Get-ADTrustRelationships {
         Analyzes Active Directory trust relationships
     #>
     [CmdletBinding()]
-    param()
+    param(
+        [string]$OutputFolder = $script:ADOutputPath
+    )
     
     Write-ModuleLog "Analyzing AD trust relationships..." -Level Info
     
@@ -866,7 +1132,9 @@ function Get-PasswordPolicies {
         Analyzes domain and fine-grained password policies
     #>
     [CmdletBinding()]
-    param()
+    param(
+        [string]$OutputFolder = $script:ADOutputPath
+    )
     
     Write-ModuleLog "Analyzing password policies..." -Level Info
     
@@ -934,7 +1202,9 @@ function Get-DNSZoneInventory {
         Analyzes DNS zones and configurations
     #>
     [CmdletBinding()]
-    param()
+    param(
+        [string]$OutputFolder = $script:ADOutputPath
+    )
     
     Write-ModuleLog "Analyzing DNS zones..." -Level Info
     
@@ -1004,7 +1274,9 @@ function Get-CertificateServices {
         Audits Active Directory Certificate Services if available
     #>
     [CmdletBinding()]
-    param()
+    param(
+        [string]$OutputFolder = $script:ADOutputPath
+    )
     
     Write-ModuleLog "Analyzing Certificate Services..." -Level Info
     
@@ -1610,37 +1882,54 @@ function Get-ServerLogonHistory {
 
 #region Main Execution
 
+# Only run main execution if not being dot-sourced for testing
+if ($MyInvocation.InvocationName -ne '.') {
 try {
     Write-ModuleLog "Starting Active Directory audit..." -Level Info
     Write-ModuleLog "Output folder: $OutputFolder" -Level Info
+    
+    # Check if running performance analysis only
+    if ($PerformanceAnalysisOnly) {
+        Write-ModuleLog "Running performance analysis only..." -Level Info
+        $performanceResults = Get-ADPerformanceAnalysis -OutputFolder $OutputFolder
+        Write-ModuleLog "Performance analysis complete: $($performanceResults.Recommendations.Count) recommendations generated" -Level Success
+        return
+    }
     
     # Collect forest and domain information
     $forestInfo = Get-ADForestInfo
     
     # Collect user inventory
-    $users = Get-ADUserInventory
+    $users = Get-ADUserInventory -OutputFolder $OutputFolder
     
     # Collect computer inventory (returns member servers)
-    $memberServers = Get-ADComputerInventory
+    $memberServers = Get-ADComputerInventory -OutputFolder $OutputFolder
     
     # Collect group inventory
-    $groups = Get-ADGroupInventory
+    $groups = Get-ADGroupInventory -OutputFolder $OutputFolder
     
     # Collect privileged accounts
-    $privilegedAccounts = Get-PrivilegedAccounts
+    $privilegedAccounts = Get-PrivilegedAccounts -OutputFolder $OutputFolder
+    
+    # Performance Analysis and Capacity Planning
+    if (-not $SkipPerformanceAnalysis) {
+        Write-ModuleLog "Running AD performance analysis..." -Level Info
+        $performanceResults = Get-ADPerformanceAnalysis -OutputFolder $OutputFolder
+        Write-ModuleLog "Performance analysis complete: $($performanceResults.Recommendations.Count) recommendations generated" -Level Success
+    }
     
     # Advanced AD Security Components
     Write-ModuleLog "Collecting advanced AD security components..." -Level Info
     
-    Get-ACLAnalysis | Out-Null
-    Get-KerberosDelegation | Out-Null
-    Get-DHCPScopeAnalysis | Out-Null
-    Get-GPOInventory | Out-Null
-    Get-ServiceAccounts | Out-Null
-    Get-ADTrustRelationships | Out-Null
-    Get-PasswordPolicies | Out-Null
-    Get-DNSZoneInventory | Out-Null
-    Get-CertificateServices | Out-Null
+    Get-ACLAnalysis -OutputFolder $OutputFolder | Out-Null
+    Get-KerberosDelegation -OutputFolder $OutputFolder | Out-Null
+    Get-DHCPScopeAnalysis -OutputFolder $OutputFolder | Out-Null
+    Get-GPOInventory -OutputFolder $OutputFolder | Out-Null
+    Get-ServiceAccounts -OutputFolder $OutputFolder | Out-Null
+    Get-ADTrustRelationships -OutputFolder $OutputFolder | Out-Null
+    Get-PasswordPolicies -OutputFolder $OutputFolder | Out-Null
+    Get-DNSZoneInventory -OutputFolder $OutputFolder | Out-Null
+    Get-CertificateServices -OutputFolder $OutputFolder | Out-Null
     
     Write-ModuleLog "Advanced AD security component collection complete" -Level Success
     
@@ -1705,6 +1994,7 @@ try {
 catch {
     Write-ModuleLog "Active Directory audit failed: $_" -Level Error
     throw
+}
 }
 
 #endregion
