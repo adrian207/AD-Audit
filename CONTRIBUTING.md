@@ -14,7 +14,7 @@ Thank you for your interest in contributing to the AD-Audit PowerShell module! W
 ### **Development Setup**
 ```powershell
 # Clone the repository
-git clone https://github.com/yourusername/AD-Audit.git
+git clone https://github.com/adrian207/AD-Audit.git
 cd AD-Audit
 
 # Install development dependencies
@@ -261,7 +261,7 @@ Any additional information that might be helpful
 - **Secure Coding**: Follow secure coding practices
 
 ### **Security Reporting**
-For security vulnerabilities, please email security@example.com instead of creating a public issue.
+For security vulnerabilities, please email adrian207@gmail.com instead of creating a public issue.
 
 ## 📚 **Resources**
 
@@ -293,9 +293,9 @@ For security vulnerabilities, please email security@example.com instead of creat
 ## 📞 **Contact**
 
 - **Maintainer**: Adrian Johnson <adrian207@gmail.com>
-- **GitHub**: [@yourusername](https://github.com/yourusername)
-- **Issues**: [GitHub Issues](https://github.com/yourusername/AD-Audit/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/yourusername/AD-Audit/discussions)
+- **GitHub**: [@adrian207](https://github.com/adrian207)
+- **Issues**: [GitHub Issues](https://github.com/adrian207/AD-Audit/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/adrian207/AD-Audit/discussions)
 
 ## 🙏 **Acknowledgments**
 
