@@ -1,0 +1,401 @@
+name: AD-Audit Code Quality & Security Checks
+
+on:
+  push:
+    branches: [ main, develop, 'feature/*', 'hotfix/*' ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+env:
+  POWERSHELL_VERSION: '7.4.0'
+  PESTER_VERSION: '5.7.1'
+
+jobs:
+  powershell-script-analyzer:
+    name: PowerShell Script Analyzer
+    runs-on: windows-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Install PowerShell
+      uses: actions/setup-powershell@v1
+      with:
+        version: ${{ env.POWERSHELL_VERSION }}
+        
+    - name: Install PSScriptAnalyzer
+      run: |
+        Install-Module -Name PSScriptAnalyzer -Force -SkipPublisherCheck -Scope CurrentUser
+        
+    - name: Run Script Analyzer on Modules
+      run: |
+        $results = Invoke-ScriptAnalyzer -Path "Modules/" -Recurse -Severity @('Error', 'Warning', 'Information')
+        if ($results) {
+          Write-Host "Script Analyzer found $($results.Count) issues:"
+          $results | Format-Table -AutoSize
+          exit 1
+        } else {
+          Write-Host "✅ No Script Analyzer issues found"
+        }
+        
+    - name: Run Script Analyzer on Tests
+      run: |
+        $results = Invoke-ScriptAnalyzer -Path "Tests/" -Recurse -Severity @('Error', 'Warning')
+        if ($results) {
+          Write-Host "Script Analyzer found $($results.Count) issues in tests:"
+          $results | Format-Table -AutoSize
+          exit 1
+        } else {
+          Write-Host "✅ No Script Analyzer issues found in tests"
+        }
+
+  pester-tests:
+    name: Pester Tests
+    runs-on: windows-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Install PowerShell
+      uses: actions/setup-powershell@v1
+      with:
+        version: ${{ env.POWERSHELL_VERSION }}
+        
+    - name: Install Pester
+      run: |
+        Install-Module -Name Pester -Force -SkipPublisherCheck -Scope CurrentUser -MinimumVersion ${{ env.PESTER_VERSION }}
+        
+    - name: Run Pester Tests
+      run: |
+        cd Tests
+        $result = Invoke-Pester -Path "*.Tests.ps1" -PassThru -OutputFile "TestResults.xml" -OutputFormat NUnitXml
+        
+        Write-Host "Test Results:"
+        Write-Host "  Passed: $($result.PassedCount)"
+        Write-Host "  Failed: $($result.FailedCount)"
+        Write-Host "  Total: $($result.TotalCount)"
+        Write-Host "  Success Rate: $([math]::Round(($result.PassedCount / $result.TotalCount) * 100, 2))%"
+        
+        if ($result.FailedCount -gt 0) {
+          Write-Host "❌ Tests failed"
+          exit 1
+        } else {
+          Write-Host "✅ All tests passed"
+        }
+        
+    - name: Upload Test Results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: test-results
+        path: Tests/TestResults.xml
+
+  code-coverage:
+    name: Code Coverage Analysis
+    runs-on: windows-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Install PowerShell
+      uses: actions/setup-powershell@v1
+      with:
+        version: ${{ env.POWERSHELL_VERSION }}
+        
+    - name: Install Pester
+      run: |
+        Install-Module -Name Pester -Force -SkipPublisherCheck -Scope CurrentUser -MinimumVersion ${{ env.PESTER_VERSION }}
+        
+    - name: Run Code Coverage Analysis
+      run: |
+        cd Tests
+        $config = New-PesterConfiguration
+        $config.Run.Path = "."
+        $config.Run.PassThru = $true
+        $config.CodeCoverage.Enabled = $true
+        $config.CodeCoverage.Path = "../Modules/*.ps1", "../Libraries/*.ps1"
+        $config.CodeCoverage.OutputFormat = 'JaCoCo'
+        $config.CodeCoverage.OutputPath = 'coverage.xml'
+        
+        $result = Invoke-Pester -Configuration $config
+        
+        Write-Host "Code Coverage Results:"
+        Write-Host "  Coverage: $([math]::Round($result.CodeCoverage.NumberOfCommandsExecuted / $result.CodeCoverage.NumberOfCommandsAnalyzed * 100, 2))%"
+        Write-Host "  Commands Executed: $($result.CodeCoverage.NumberOfCommandsExecuted)"
+        Write-Host "  Commands Analyzed: $($result.CodeCoverage.NumberOfCommandsAnalyzed)"
+        
+        if (($result.CodeCoverage.NumberOfCommandsExecuted / $result.CodeCoverage.NumberOfCommandsAnalyzed) -lt 0.7) {
+          Write-Host "❌ Code coverage below 70% threshold"
+          exit 1
+        } else {
+          Write-Host "✅ Code coverage meets threshold"
+        }
+        
+    - name: Upload Coverage Results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: coverage-results
+        path: Tests/coverage.xml
+
+  security-scan:
+    name: Security Scan
+    runs-on: windows-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Install PowerShell
+      uses: actions/setup-powershell@v1
+      with:
+        version: ${{ env.POWERSHELL_VERSION }}
+        
+    - name: Install Security Scanning Tools
+      run: |
+        Install-Module -Name PSScriptAnalyzer -Force -SkipPublisherCheck -Scope CurrentUser
+        Install-Module -Name SecurityPolicyDsc -Force -SkipPublisherCheck -Scope CurrentUser -ErrorAction SilentlyContinue
+        
+    - name: Security Analysis - Hardcoded Credentials
+      run: |
+        $credentialPatterns = @(
+          'password\s*=\s*["\'][^"\']+["\']',
+          'pwd\s*=\s*["\'][^"\']+["\']',
+          'pass\s*=\s*["\'][^"\']+["\']',
+          'secret\s*=\s*["\'][^"\']+["\']',
+          'key\s*=\s*["\'][^"\']+["\']',
+          'token\s*=\s*["\'][^"\']+["\']'
+        )
+        
+        $files = Get-ChildItem -Path "Modules/", "Libraries/", "Tests/" -Recurse -Include "*.ps1"
+        $securityIssues = @()
+        
+        foreach ($file in $files) {
+          $content = Get-Content $file.FullName -Raw
+          foreach ($pattern in $credentialPatterns) {
+            if ($content -match $pattern) {
+              $securityIssues += "Potential hardcoded credential in $($file.FullName)"
+            }
+          }
+        }
+        
+        if ($securityIssues.Count -gt 0) {
+          Write-Host "❌ Security issues found:"
+          $securityIssues | ForEach-Object { Write-Host "  $_" }
+          exit 1
+        } else {
+          Write-Host "✅ No hardcoded credentials found"
+        }
+        
+    - name: Security Analysis - Script Analyzer Security Rules
+      run: |
+        $securityRules = @(
+          'PSAvoidUsingPlainTextForPassword',
+          'PSAvoidUsingConvertToSecureStringWithPlainText',
+          'PSAvoidUsingUsernameAndPasswordParams',
+          'PSAvoidUsingInvokeExpression',
+          'PSAvoidUsingCmdletAliases',
+          'PSAvoidUsingPositionalParameters',
+          'PSAvoidUsingEmptyCatchBlock',
+          'PSAvoidUsingWMICmdlet',
+          'PSAvoidUsingInvokeRestMethod',
+          'PSAvoidUsingInvokeWebRequest'
+        )
+        
+        $results = Invoke-ScriptAnalyzer -Path "Modules/", "Libraries/" -Recurse -IncludeRule $securityRules
+        if ($results) {
+          Write-Host "❌ Security rule violations found:"
+          $results | Format-Table -AutoSize
+          exit 1
+        } else {
+          Write-Host "✅ No security rule violations found"
+        }
+        
+    - name: Security Analysis - File Permissions
+      run: |
+        $sensitiveFiles = @(
+          "*.ps1",
+          "*.psd1",
+          "*.psm1"
+        )
+        
+        foreach ($pattern in $sensitiveFiles) {
+          $files = Get-ChildItem -Path "." -Recurse -Include $pattern
+          foreach ($file in $files) {
+            $acl = Get-Acl $file.FullName
+            $hasEveryoneAccess = $acl.Access | Where-Object { $_.IdentityReference -eq "Everyone" -and $_.FileSystemRights -match "FullControl|Modify|Write" }
+            if ($hasEveryoneAccess) {
+              Write-Host "❌ Security issue: $($file.FullName) has Everyone access"
+              exit 1
+            }
+          }
+        }
+        
+        Write-Host "✅ File permissions are secure"
+
+  documentation-check:
+    name: Documentation Validation
+    runs-on: windows-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Install PowerShell
+      uses: actions/setup-powershell@v1
+      with:
+        version: ${{ env.POWERSHELL_VERSION }}
+        
+    - name: Validate Documentation Structure
+      run: |
+        $requiredDocs = @(
+          "README.md",
+          "docs/README.md",
+          "docs/USER_GUIDE.md",
+          "docs/INSTALLATION.md",
+          "docs/TROUBLESHOOTING.md",
+          "docs/MODULE_REFERENCE.md"
+        )
+        
+        $missingDocs = @()
+        foreach ($doc in $requiredDocs) {
+          if (-not (Test-Path $doc)) {
+            $missingDocs += $doc
+          }
+        }
+        
+        if ($missingDocs.Count -gt 0) {
+          Write-Host "❌ Missing required documentation:"
+          $missingDocs | ForEach-Object { Write-Host "  $_" }
+          exit 1
+        } else {
+          Write-Host "✅ All required documentation present"
+        }
+        
+    - name: Validate Markdown Syntax
+      run: |
+        $markdownFiles = Get-ChildItem -Path "docs/" -Recurse -Include "*.md"
+        $syntaxErrors = @()
+        
+        foreach ($file in $markdownFiles) {
+          $content = Get-Content $file.FullName -Raw
+          
+          # Check for common markdown issues
+          if ($content -match '\[.*\]\(.*\)' -and $content -notmatch '\[.*\]\(https?://.*\)') {
+            # Check for relative links that might be broken
+            $links = [regex]::Matches($content, '\[([^\]]+)\]\(([^)]+)\)')
+            foreach ($link in $links) {
+              $linkPath = $link.Groups[2].Value
+              if ($linkPath -notmatch '^https?://' -and $linkPath -notmatch '^#') {
+                $fullPath = Join-Path (Split-Path $file.FullName) $linkPath
+                if (-not (Test-Path $fullPath)) {
+                  $syntaxErrors += "Broken link in $($file.Name): $linkPath"
+                }
+              }
+            }
+          }
+        }
+        
+        if ($syntaxErrors.Count -gt 0) {
+          Write-Host "❌ Markdown syntax issues found:"
+          $syntaxErrors | ForEach-Object { Write-Host "  $_" }
+          exit 1
+        } else {
+          Write-Host "✅ Markdown syntax validation passed"
+        }
+
+  performance-validation:
+    name: Performance Validation
+    runs-on: windows-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Install PowerShell
+      uses: actions/setup-powershell@v1
+      with:
+        version: ${{ env.POWERSHELL_VERSION }}
+        
+    - name: Validate Performance Features
+      run: |
+        # Check that performance analysis function exists
+        $modulePath = "Modules/Invoke-AD-Audit.ps1"
+        $moduleContent = Get-Content $modulePath -Raw
+        
+        if ($moduleContent -notmatch 'function Get-ADPerformanceAnalysis') {
+          Write-Host "❌ Performance analysis function not found"
+          exit 1
+        }
+        
+        if ($moduleContent -notmatch 'SkipPerformanceAnalysis') {
+          Write-Host "❌ Performance analysis parameters not found"
+          exit 1
+        }
+        
+        if ($moduleContent -notmatch 'PerformanceAnalysisOnly') {
+          Write-Host "❌ Performance analysis only parameter not found"
+          exit 1
+        }
+        
+        Write-Host "✅ Performance features validation passed"
+        
+    - name: Validate LDAP Optimization
+      run: |
+        $modulePath = "Modules/Invoke-AD-Audit.ps1"
+        $moduleContent = Get-Content $modulePath -Raw
+        
+        # Check for optimized property lists instead of Properties *
+        if ($moduleContent -match 'Get-ADUser.*Properties \*') {
+          Write-Host "❌ Found unoptimized Get-ADUser with Properties *"
+          exit 1
+        }
+        
+        if ($moduleContent -match 'Get-ADComputer.*Properties \*') {
+          Write-Host "❌ Found unoptimized Get-ADComputer with Properties *"
+          exit 1
+        }
+        
+        if ($moduleContent -match 'Get-ADGroup.*Properties \*') {
+          Write-Host "❌ Found unoptimized Get-ADGroup with Properties *"
+          exit 1
+        }
+        
+        Write-Host "✅ LDAP optimization validation passed"
+
+  integration-test:
+    name: Integration Test
+    runs-on: windows-latest
+    needs: [powershell-script-analyzer, pester-tests, security-scan]
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Install PowerShell
+      uses: actions/setup-powershell@v1
+      with:
+        version: ${{ env.POWERSHELL_VERSION }}
+        
+    - name: Install Dependencies
+      run: |
+        Install-Module -Name Pester -Force -SkipPublisherCheck -Scope CurrentUser -MinimumVersion ${{ env.PESTER_VERSION }}
+        Install-Module -Name PSScriptAnalyzer -Force -SkipPublisherCheck -Scope CurrentUser
+        
+    - name: Run Integration Test
+      run: |
+        # Test that the module can be imported without errors
+        try {
+          Import-Module "Modules/Invoke-AD-Audit.ps1" -Force -ErrorAction Stop
+          Write-Host "✅ Module import successful"
+        } catch {
+          Write-Host "❌ Module import failed: $_"
+          exit 1
+        }
+        
+        # Test that performance analysis function exists
+        if (Get-Command Get-ADPerformanceAnalysis -ErrorAction SilentlyContinue) {
+          Write-Host "✅ Performance analysis function available"
+        } else {
+          Write-Host "❌ Performance analysis function not available"
+          exit 1
+        }
+        
+        Write-Host "✅ Integration test passed"

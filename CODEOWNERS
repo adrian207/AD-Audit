@@ -1,0 +1,30 @@
+# AD-Audit Code Owners
+# This file defines who can approve changes to different parts of the repository
+
+# Global owners - can approve any changes
+* @adrian207
+
+# Core modules require security review
+/Modules/Invoke-AD-Audit.ps1 @adrian207
+/Modules/Invoke-CredentialTheftPrevention.ps1 @adrian207
+/Modules/Invoke-DomainControllerSecurity.ps1 @adrian207
+/Modules/Invoke-LeastPrivilegeAssessment.ps1 @adrian207
+
+# Security-sensitive files
+/.github/workflows/ @adrian207
+/.github/rulesets/ @adrian207
+/CODEOWNERS @adrian207
+
+# Documentation requires technical review
+/docs/ @adrian207
+/README.md @adrian207
+
+# Tests require code quality review
+/Tests/ @adrian207
+
+# Libraries require security review
+/Libraries/ @adrian207
+
+# Configuration files
+/azure-pipelines.yml @adrian207
+/Publish-ToGallery.ps1 @adrian207

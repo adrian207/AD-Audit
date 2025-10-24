@@ -1,127 +1,73 @@
-# PowerShell Module .gitignore
+# AD-Audit PowerShell Module .gitignore
 
 # PowerShell specific
-*.ps1xml
-*.psm1.bak
-*.psd1.bak
 *.ps1.bak
+*.ps1.orig
+*.ps1~
+*.psm1.bak
+*.psm1.orig
+*.psm1~
+*.psd1.bak
+*.psd1.orig
+*.psd1~
 
-# PowerShell execution policies
-*.ps1.ps1
+# PowerShell execution policy
+ExecutionPolicy.txt
+
+# PowerShell profile
+Microsoft.PowerShell_profile.ps1
+
+# PowerShell modules cache
+PowerShell/
 
 # PowerShell help files
 *.help.txt
 *.help.xml
 
-# PowerShell module cache
-ModuleCache/
-ModuleAnalysisCache/
+# PowerShell script analyzer
+PSScriptAnalyzer/
 
-# PowerShell profile
-Microsoft.PowerShell_profile.ps1
-
-# PowerShell ISE
-*.ps1.ps1
-
-# PowerShell Studio
-*.psproj
-*.psproj.user
-
-# PowerShell Test Results
+# Test results
 TestResults.xml
 TestResults.trx
-*.testresults
-
-# PowerShell Coverage
 coverage.xml
+coverage.json
 *.coverage
 
-# PowerShell Script Analyzer
-PSScriptAnalyzerSettings.psd1
+# Pester test results
+PesterTestResults.xml
+PesterTestResults.html
 
 # PowerShell Gallery
 *.nupkg
 *.snupkg
 
-# PowerShell Module Build
-Build/
-Release/
-Dist/
-
-# Database files
-*.db
-*.sqlite
-*.sqlite3
-*.mdb
-*.accdb
-
-# Log files
-*.log
-*.txt
-logs/
-Logs/
-
 # Temporary files
 *.tmp
 *.temp
-temp/
-Temp/
-tmp/
-Tmp/
-
-# Output files
-*.csv
-*.json
-*.xml
-*.html
-*.pdf
-Output/
-output/
-Reports/
-reports/
-
-# Configuration files with sensitive data
-config.json
-settings.json
-credentials.json
-secrets.json
-*.config
-*.conf
-
-# Environment files
-.env
-.env.local
-.env.production
-.env.staging
-
-# IDE and Editor files
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-.DS_Store
-Thumbs.db
+*.log
+*.out
 
 # Windows specific
-desktop.ini
+Thumbs.db
+ehthumbs.db
+Desktop.ini
 $RECYCLE.BIN/
 *.cab
 *.msi
-*.msix
 *.msm
 *.msp
+*.lnk
 
-# Visual Studio
-.vs/
-*.user
-*.suo
-*.userosscache
-*.sln.docstates
+# Visual Studio Code
+.vscode/
+*.code-workspace
 
-# JetBrains Rider
+# JetBrains IDEs
 .idea/
-*.sln.iml
+*.iml
+*.ipr
+*.iws
 
 # Sublime Text
 *.sublime-project
@@ -142,334 +88,93 @@ auto-save-list
 tramp
 .\#*
 
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+
+# Linux
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
+
+# Audit output files (sensitive data)
+AuditResults/
+AuditData/
+Reports/
+Logs/
+*.csv
+*.json
+*.xml
+*.html
+*.db
+*.sqlite
+*.sqlite3
+
+# Encrypted files
+*.encrypted
+*.zip
+*.7z
+*.rar
+*.tar.gz
+
+# Credential files
+*.cred
+*.key
+*.pem
+*.pfx
+*.p12
+
+# Configuration files with sensitive data
+config.json
+settings.json
+secrets.json
+*.config
+*.conf
+
 # Backup files
 *.bak
 *.backup
 *.old
-*.orig
-
-# Archive files
-*.zip
-*.rar
-*.7z
-*.tar
-*.gz
-*.bz2
-
-# Certificate files
-*.pfx
-*.p12
-*.cer
-*.crt
-*.key
-*.pem
-
-# Encrypted files
-*.encrypted
-*.enc
-
-# Sensitive data files
-passwords.txt
-secrets.txt
-credentials.txt
-*.secret
-*.private
-
-# Test data
-TestData/
-test-data/
-sample-data/
-
-# Documentation build
-docs/_build/
-docs/build/
-site/
-
-# Node.js (if using for documentation)
-node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# Python (if using for documentation)
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-env/
-venv/
-ENV/
-env.bak/
-venv.bak/
-
-# Git
-.git/
-.gitignore.bak
-
-# GitHub
-.github/workflows/*.yml.bak
-
-# Azure DevOps
-.azure-pipelines/
-azure-pipelines.yml.bak
-
-# Jenkins
-Jenkinsfile.bak
-
-# Docker
-Dockerfile.bak
-docker-compose.yml.bak
-.dockerignore.bak
-
-# Kubernetes
-*.yaml.bak
-*.yml.bak
-
-# Terraform
-*.tfstate
-*.tfstate.*
-.terraform/
-*.tfplan
-
-# Ansible
-*.retry
-.ansible/
-
-# Vagrant
-.vagrant/
-Vagrantfile.bak
-
-# Packer
-*.pkr.hcl.bak
-
-# Local development
-local/
-Local/
-dev/
-Dev/
-development/
-Development/
-
-# Production
-prod/
-Prod/
-production/
-Production/
-
-# Staging
-staging/
-Staging/
-
-# Testing
-test/
-Test/
-tests/
-Tests/
-spec/
-Spec/
-
-# Coverage
-coverage/
-Coverage/
-.nyc_output/
-
-# Performance
-*.perf
-*.prof
-
-# Memory dumps
-*.dmp
-*.dump
-
-# Core dumps
-core.*
-
-# Crash reports
-*.crash
-*.crashreport
-
-# System files
-.DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
-
-# Windows shortcuts
-*.lnk
-
-# Office temporary files
-~$*
-
-# Adobe
-*.indd
-*.idlk
-
-# Photoshop
-*.psd
-
-# Illustrator
-*.ai
-
-# InDesign
-*.indd
-
-# Acrobat
-*.fdf
-
-# Flash
-*.fla
-*.swf
-
-# Video files
-*.avi
-*.mp4
-*.mov
-*.wmv
-*.flv
-*.webm
-
-# Audio files
-*.mp3
-*.wav
-*.flac
-*.aac
-*.ogg
-
-# Image files (if not needed)
-*.jpg
-*.jpeg
-*.png
-*.gif
-*.bmp
-*.tiff
-*.ico
-*.svg
-
-# Font files
-*.ttf
-*.otf
-*.woff
-*.woff2
-*.eot
-
-# 3D files
-*.3ds
-*.obj
-*.dae
-*.blend
-*.fbx
-
-# CAD files
-*.dwg
-*.dxf
-*.step
-*.stp
-
-# Compressed files
-*.zip
-*.rar
-*.7z
-*.tar
-*.gz
-*.bz2
-*.xz
-
-# Executable files
-*.exe
-*.dll
-*.so
-*.dylib
-*.app
-
-# Script files (if not PowerShell)
-*.bat
-*.cmd
-*.sh
-*.bash
-*.zsh
-*.fish
-
-# Configuration files (if sensitive)
-*.ini
-*.cfg
-*.conf
-*.properties
-*.yaml
-*.yml
-*.toml
-*.hcl
-
-# GitHub workflow files should be tracked
-!.github/workflows/*.yml
-!.github/workflows/*.yaml
 
 # Lock files
 *.lock
-package-lock.json
-yarn.lock
-Pipfile.lock
-Gemfile.lock
+*.pid
 
-# Dependency directories
-vendor/
-Vendor/
-lib/
-Lib/
-libs/
-Libs/
-
-# Build artifacts
-build/
-Build/
-dist/
-Dist/
-out/
-Out/
-target/
-Target/
-
-# Cache directories
-.cache/
-Cache/
-cache/
-.npm/
-.yarn/
-
-# Runtime data
-pids/
+# Runtime files
 *.pid
 *.seed
 *.pid.lock
 
 # Coverage directory used by tools like istanbul
 coverage/
-.nyc_output/
+*.lcov
 
-# Grunt intermediate storage
-.grunt/
-
-# Bower dependency directory
-bower_components/
-
-# node-waf configuration
-.lock-wscript
-
-# Compiled binary addons
-build/Release/
+# nyc test coverage
+.nyc_output
 
 # Dependency directories
 node_modules/
 jspm_packages/
 
-# TypeScript cache
-*.tsbuildinfo
-
 # Optional npm cache directory
-.npm/
+.npm
 
 # Optional eslint cache
 .eslintcache
@@ -492,32 +197,39 @@ jspm_packages/
 # dotenv environment variables file
 .env
 .env.test
+.env.production
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
 
-# parcel-bundler cache
-.parcel-cache/
+# parcel-bundler cache (https://parceljs.org/)
+.cache
+.parcel-cache
 
 # Next.js build output
-.next/
+.next
 
 # Nuxt.js build / generate output
-.nuxt/
-dist/
+.nuxt
+dist
 
 # Gatsby files
 .cache/
-public/
+public
 
 # Storybook build outputs
-.out/
-.storybook-out/
+.out
+.storybook-out
 
 # Temporary folders
 tmp/
 temp/
 
 # Editor directories and files
-.vscode/
-.idea/
+.vscode/*
+!.vscode/extensions.json
+.idea
 *.suo
 *.ntvs*
 *.njsproj
@@ -532,3 +244,43 @@ temp/
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# PowerShell specific exclusions
+# Keep these files in the repository
+!*.ps1
+!*.psm1
+!*.psd1
+!*.ps1xml
+!*.psc1
+!*.ps1xml
+
+# Keep documentation
+!*.md
+!docs/
+!README.md
+
+# Keep configuration files
+!*.yml
+!*.yaml
+!.github/
+!azure-pipelines.yml
+
+# Keep test files
+!Tests/
+!*.Tests.ps1
+
+# Keep utility scripts
+!Utilities/
+!Libraries/
+
+# Keep demo scripts
+!Demo-*.ps1
+!Start-*.ps1
+!Run-*.ps1
+!New-*.ps1
+!Invoke-*.ps1
+!Get-*.ps1
+!Set-*.ps1
+!Install-*.ps1
+!Setup-*.ps1
+!Publish-*.ps1
