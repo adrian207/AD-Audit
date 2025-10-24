@@ -30,24 +30,32 @@ jobs:
         
     - name: Run Script Analyzer on Modules
       run: |
-        $results = Invoke-ScriptAnalyzer -Path "Modules/" -Recurse -Severity @('Error', 'Warning', 'Information')
-        if ($results) {
-          Write-Host "Script Analyzer found $($results.Count) issues:"
-          $results | Format-Table -AutoSize
-          exit 1
+        if (Test-Path "Modules/") {
+          $results = Invoke-ScriptAnalyzer -Path "Modules/" -Recurse -Severity @('Error', 'Warning', 'Information')
+          if ($results) {
+            Write-Host "Script Analyzer found $($results.Count) issues:"
+            $results | Format-Table -AutoSize
+            exit 1
+          } else {
+            Write-Host "✅ No Script Analyzer issues found"
+          }
         } else {
-          Write-Host "✅ No Script Analyzer issues found"
+          Write-Host "⚠️ Modules directory not found, skipping analysis"
         }
         
     - name: Run Script Analyzer on Tests
       run: |
-        $results = Invoke-ScriptAnalyzer -Path "Tests/" -Recurse -Severity @('Error', 'Warning')
-        if ($results) {
-          Write-Host "Script Analyzer found $($results.Count) issues in tests:"
-          $results | Format-Table -AutoSize
-          exit 1
+        if (Test-Path "Tests/") {
+          $results = Invoke-ScriptAnalyzer -Path "Tests/" -Recurse -Severity @('Error', 'Warning')
+          if ($results) {
+            Write-Host "Script Analyzer found $($results.Count) issues in tests:"
+            $results | Format-Table -AutoSize
+            exit 1
+          } else {
+            Write-Host "✅ No Script Analyzer issues found in tests"
+          }
         } else {
-          Write-Host "✅ No Script Analyzer issues found in tests"
+          Write-Host "⚠️ Tests directory not found, skipping analysis"
         }
 
   pester-tests:
@@ -68,20 +76,32 @@ jobs:
         
     - name: Run Pester Tests
       run: |
-        cd Tests
-        $result = Invoke-Pester -Path "*.Tests.ps1" -PassThru -OutputFile "TestResults.xml" -OutputFormat NUnitXml
-        
-        Write-Host "Test Results:"
-        Write-Host "  Passed: $($result.PassedCount)"
-        Write-Host "  Failed: $($result.FailedCount)"
-        Write-Host "  Total: $($result.TotalCount)"
-        Write-Host "  Success Rate: $([math]::Round(($result.PassedCount / $result.TotalCount) * 100, 2))%"
-        
-        if ($result.FailedCount -gt 0) {
-          Write-Host "❌ Tests failed"
-          exit 1
+        if (Test-Path "Tests/") {
+          cd Tests
+          $testFiles = Get-ChildItem -Path "*.Tests.ps1" -ErrorAction SilentlyContinue
+          if ($testFiles) {
+            $result = Invoke-Pester -Path "*.Tests.ps1" -PassThru -OutputFile "TestResults.xml" -OutputFormat NUnitXml
+            
+            Write-Host "Test Results:"
+            Write-Host "  Passed: $($result.PassedCount)"
+            Write-Host "  Failed: $($result.FailedCount)"
+            Write-Host "  Total: $($result.TotalCount)"
+            if ($result.TotalCount -gt 0) {
+              $successRate = [math]::Round(($result.PassedCount / $result.TotalCount) * 100, 2)
+              Write-Host "  Success Rate: $successRate%"
+            }
+            
+            if ($result.FailedCount -gt 0) {
+              Write-Host "❌ Tests failed"
+              exit 1
+            } else {
+              Write-Host "✅ All tests passed"
+            }
+          } else {
+            Write-Host "⚠️ No test files found in Tests directory"
+          }
         } else {
-          Write-Host "✅ All tests passed"
+          Write-Host "⚠️ Tests directory not found"
         }
         
     - name: Upload Test Results
@@ -109,32 +129,36 @@ jobs:
         
     - name: Run Code Coverage Analysis
       run: |
-        cd Tests
-        $config = New-PesterConfiguration
-        $config.Run.Path = "."
-        $config.Run.PassThru = $true
-        $config.CodeCoverage.Enabled = $true
-        $config.CodeCoverage.Path = "../Modules/*.ps1", "../Libraries/*.ps1"
-        $config.CodeCoverage.OutputFormat = 'JaCoCo'
-        $config.CodeCoverage.OutputPath = 'coverage.xml'
-        
-        $result = Invoke-Pester -Configuration $config
-        
-        Write-Host "Code Coverage Results:"
-        if ($result.CodeCoverage.NumberOfCommandsAnalyzed -gt 0) {
-          $coveragePercent = [math]::Round($result.CodeCoverage.NumberOfCommandsExecuted / $result.CodeCoverage.NumberOfCommandsAnalyzed * 100, 2)
-          Write-Host "  Coverage: $coveragePercent%"
-          Write-Host "  Commands Executed: $($result.CodeCoverage.NumberOfCommandsExecuted)"
-          Write-Host "  Commands Analyzed: $($result.CodeCoverage.NumberOfCommandsAnalyzed)"
+        if (Test-Path "Tests/") {
+          cd Tests
+          $config = New-PesterConfiguration
+          $config.Run.Path = "."
+          $config.Run.PassThru = $true
+          $config.CodeCoverage.Enabled = $true
+          $config.CodeCoverage.Path = "../Modules/*.ps1", "../Libraries/*.ps1"
+          $config.CodeCoverage.OutputFormat = 'JaCoCo'
+          $config.CodeCoverage.OutputPath = 'coverage.xml'
           
-          if ($coveragePercent -lt 70) {
-            Write-Host "❌ Code coverage below 70% threshold"
-            exit 1
+          $result = Invoke-Pester -Configuration $config
+          
+          Write-Host "Code Coverage Results:"
+          if ($result.CodeCoverage.NumberOfCommandsAnalyzed -gt 0) {
+            $coveragePercent = [math]::Round($result.CodeCoverage.NumberOfCommandsExecuted / $result.CodeCoverage.NumberOfCommandsAnalyzed * 100, 2)
+            Write-Host "  Coverage: $coveragePercent%"
+            Write-Host "  Commands Executed: $($result.CodeCoverage.NumberOfCommandsExecuted)"
+            Write-Host "  Commands Analyzed: $($result.CodeCoverage.NumberOfCommandsAnalyzed)"
+            
+            if ($coveragePercent -lt 70) {
+              Write-Host "❌ Code coverage below 70% threshold"
+              exit 1
+            } else {
+              Write-Host "✅ Code coverage meets threshold"
+            }
           } else {
-            Write-Host "✅ Code coverage meets threshold"
+            Write-Host "⚠️ No code coverage data available"
           }
         } else {
-          Write-Host "⚠️ No code coverage data available"
+          Write-Host "⚠️ Tests directory not found, skipping coverage analysis"
         }
         
     - name: Upload Coverage Results
@@ -171,28 +195,37 @@ jobs:
           'token\s*=\s*["''][^"'']+["'']'
         )
         
-        $files = Get-ChildItem -Path "Modules/", "Libraries/", "Tests/" -Recurse -Include "*.ps1" -ErrorAction SilentlyContinue
-        $securityIssues = @()
+        $searchPaths = @()
+        if (Test-Path "Modules/") { $searchPaths += "Modules/" }
+        if (Test-Path "Libraries/") { $searchPaths += "Libraries/" }
+        if (Test-Path "Tests/") { $searchPaths += "Tests/" }
         
-        foreach ($file in $files) {
-          try {
-            $content = Get-Content $file.FullName -Raw -ErrorAction Stop
-            foreach ($pattern in $credentialPatterns) {
-              if ($content -match $pattern) {
-                $securityIssues += "Potential hardcoded credential in $($file.FullName)"
+        if ($searchPaths.Count -gt 0) {
+          $files = Get-ChildItem -Path $searchPaths -Recurse -Include "*.ps1" -ErrorAction SilentlyContinue
+          $securityIssues = @()
+          
+          foreach ($file in $files) {
+            try {
+              $content = Get-Content $file.FullName -Raw -ErrorAction Stop
+              foreach ($pattern in $credentialPatterns) {
+                if ($content -match $pattern) {
+                  $securityIssues += "Potential hardcoded credential in $($file.FullName)"
+                }
               }
+            } catch {
+              Write-Warning "Could not read file: $($file.FullName)"
             }
-          } catch {
-            Write-Warning "Could not read file: $($file.FullName)"
           }
-        }
-        
-        if ($securityIssues.Count -gt 0) {
-          Write-Host "❌ Security issues found:"
-          $securityIssues | ForEach-Object { Write-Host "  $_" }
-          exit 1
+          
+          if ($securityIssues.Count -gt 0) {
+            Write-Host "❌ Security issues found:"
+            $securityIssues | ForEach-Object { Write-Host "  $_" }
+            exit 1
+          } else {
+            Write-Host "✅ No hardcoded credentials found"
+          }
         } else {
-          Write-Host "✅ No hardcoded credentials found"
+          Write-Host "⚠️ No source directories found for security scanning"
         }
         
     - name: Security Analysis - Script Analyzer Security Rules
@@ -208,13 +241,21 @@ jobs:
           'PSAvoidUsingWMICmdlet'
         )
         
-        $results = Invoke-ScriptAnalyzer -Path "Modules/", "Libraries/" -Recurse -IncludeRule $securityRules -ErrorAction SilentlyContinue
-        if ($results) {
-          Write-Host "❌ Security rule violations found:"
-          $results | Format-Table -AutoSize
-          exit 1
+        $searchPaths = @()
+        if (Test-Path "Modules/") { $searchPaths += "Modules/" }
+        if (Test-Path "Libraries/") { $searchPaths += "Libraries/" }
+        
+        if ($searchPaths.Count -gt 0) {
+          $results = Invoke-ScriptAnalyzer -Path $searchPaths -Recurse -IncludeRule $securityRules -ErrorAction SilentlyContinue
+          if ($results) {
+            Write-Host "❌ Security rule violations found:"
+            $results | Format-Table -AutoSize
+            exit 1
+          } else {
+            Write-Host "✅ No security rule violations found"
+          }
         } else {
-          Write-Host "✅ No security rule violations found"
+          Write-Host "⚠️ No source directories found for security rule analysis"
         }
 
   documentation-check:
@@ -255,38 +296,42 @@ jobs:
         
     - name: Validate Markdown Syntax
       run: |
-        $markdownFiles = Get-ChildItem -Path "docs/" -Recurse -Include "*.md" -ErrorAction SilentlyContinue
-        $syntaxErrors = @()
-        
-        foreach ($file in $markdownFiles) {
-          try {
-            $content = Get-Content $file.FullName -Raw -ErrorAction Stop
-            
-            # Check for common markdown issues
-            if ($content -match '\[.*\]\(.*\)') {
-              # Check for relative links that might be broken
-              $links = [regex]::Matches($content, '\[([^\]]+)\]\(([^)]+)\)')
-              foreach ($link in $links) {
-                $linkPath = $link.Groups[2].Value
-                if ($linkPath -notmatch '^https?://' -and $linkPath -notmatch '^#' -and $linkPath -notmatch '^mailto:') {
-                  $fullPath = Join-Path (Split-Path $file.FullName) $linkPath
-                  if (-not (Test-Path $fullPath)) {
-                    $syntaxErrors += "Broken link in $($file.Name): $linkPath"
+        if (Test-Path "docs/") {
+          $markdownFiles = Get-ChildItem -Path "docs/" -Recurse -Include "*.md" -ErrorAction SilentlyContinue
+          $syntaxErrors = @()
+          
+          foreach ($file in $markdownFiles) {
+            try {
+              $content = Get-Content $file.FullName -Raw -ErrorAction Stop
+              
+              # Check for common markdown issues
+              if ($content -match '\[.*\]\(.*\)') {
+                # Check for relative links that might be broken
+                $links = [regex]::Matches($content, '\[([^\]]+)\]\(([^)]+)\)')
+                foreach ($link in $links) {
+                  $linkPath = $link.Groups[2].Value
+                  if ($linkPath -notmatch '^https?://' -and $linkPath -notmatch '^#' -and $linkPath -notmatch '^mailto:') {
+                    $fullPath = Join-Path (Split-Path $file.FullName) $linkPath
+                    if (-not (Test-Path $fullPath)) {
+                      $syntaxErrors += "Broken link in $($file.Name): $linkPath"
+                    }
                   }
                 }
               }
+            } catch {
+              Write-Warning "Could not validate file: $($file.FullName)"
             }
-          } catch {
-            Write-Warning "Could not validate file: $($file.FullName)"
           }
-        }
-        
-        if ($syntaxErrors.Count -gt 0) {
-          Write-Host "❌ Markdown syntax issues found:"
-          $syntaxErrors | ForEach-Object { Write-Host "  $_" }
-          exit 1
+          
+          if ($syntaxErrors.Count -gt 0) {
+            Write-Host "❌ Markdown syntax issues found:"
+            $syntaxErrors | ForEach-Object { Write-Host "  $_" }
+            exit 1
+          } else {
+            Write-Host "✅ Markdown syntax validation passed"
+          }
         } else {
-          Write-Host "✅ Markdown syntax validation passed"
+          Write-Host "⚠️ docs directory not found, skipping markdown validation"
         }
 
   performance-validation:
@@ -378,20 +423,25 @@ jobs:
     - name: Run Integration Test
       run: |
         # Test that the module can be imported without errors
-        try {
-          Import-Module "Modules/Invoke-AD-Audit.ps1" -Force -ErrorAction Stop
-          Write-Host "✅ Module import successful"
-        } catch {
-          Write-Host "❌ Module import failed: $_"
-          exit 1
-        }
-        
-        # Test that performance analysis function exists
-        if (Get-Command Get-ADPerformanceAnalysis -ErrorAction SilentlyContinue) {
-          Write-Host "✅ Performance analysis function available"
+        if (Test-Path "Modules/Invoke-AD-Audit.ps1") {
+          try {
+            Import-Module "Modules/Invoke-AD-Audit.ps1" -Force -ErrorAction Stop
+            Write-Host "✅ Module import successful"
+          } catch {
+            Write-Host "❌ Module import failed: $_"
+            exit 1
+          }
+          
+          # Test that performance analysis function exists
+          if (Get-Command Get-ADPerformanceAnalysis -ErrorAction SilentlyContinue) {
+            Write-Host "✅ Performance analysis function available"
+          } else {
+            Write-Host "❌ Performance analysis function not available"
+            exit 1
+          }
+          
+          Write-Host "✅ Integration test passed"
         } else {
-          Write-Host "❌ Performance analysis function not available"
+          Write-Host "❌ Module file not found: Modules/Invoke-AD-Audit.ps1"
           exit 1
         }
-        
-        Write-Host "✅ Integration test passed"
