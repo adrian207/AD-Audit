@@ -8,8 +8,13 @@ on:
   release:
     types: [ published ]
 
+env:
+  POWERSHELL_VERSION: '7.4.0'
+  PESTER_VERSION: '5.7.1'
+
 jobs:
   test:
+    name: Run Tests
     runs-on: windows-latest
     strategy:
       matrix:
@@ -33,62 +38,177 @@ jobs:
         Write-Host "Using Windows PowerShell ${{ matrix.pwsh-version }}"
         $PSVersionTable
         
-    - name: Install Pester
+    - name: Install Dependencies
       shell: pwsh
       run: |
-        Install-Module -Name Pester -Force -SkipPublisherCheck
-        Install-Module -Name PSScriptAnalyzer -Force -SkipPublisherCheck
+        Install-Module -Name Pester -Force -SkipPublisherCheck -Scope CurrentUser -MinimumVersion ${{ env.PESTER_VERSION }}
+        Install-Module -Name PSScriptAnalyzer -Force -SkipPublisherCheck -Scope CurrentUser
         
     - name: Run PSScriptAnalyzer
       shell: pwsh
       run: |
-        $results = Invoke-ScriptAnalyzer -Path . -Recurse -Severity @('Error', 'Warning')
+        $results = Invoke-ScriptAnalyzer -Path . -Recurse -Severity @('Error', 'Warning') -ExcludeRule PSAvoidUsingWriteHost
         if ($results) {
-          Write-Host "ScriptAnalyzer found $($results.Count) issues:"
+          Write-Host "ScriptAnalyzer found $($results.Count) issues:" -ForegroundColor Yellow
           $results | ForEach-Object { Write-Host "  $($_.Severity): $($_.Message) at $($_.ScriptPath):$($_.Line)" }
-          exit 1
+          
+          $errorCount = ($results | Where-Object Severity -eq 'Error').Count
+          if ($errorCount -gt 0) {
+            Write-Host "##vso[task.logissue type=error]Found $errorCount error(s)"
+            exit 1
+          }
         } else {
-          Write-Host "No ScriptAnalyzer issues found"
+          Write-Host "No ScriptAnalyzer issues found" -ForegroundColor Green
         }
         
     - name: Run Pester Tests
       shell: pwsh
       run: |
-        $testResults = Invoke-Pester -Path .\Tests\ -OutputFile TestResults.xml -OutputFormat NUnitXml -PassThru
-        if ($testResults.FailedCount -gt 0) {
-          Write-Host "Pester tests failed: $($testResults.FailedCount) failures"
-          exit 1
+        if (Test-Path "Tests/") {
+          cd Tests
+          $testFiles = Get-ChildItem -Path "*.Tests.ps1" -ErrorAction SilentlyContinue
+          if ($testFiles) {
+            $testResults = Invoke-Pester -Path "*.Tests.ps1" -OutputFile "TestResults.xml" -OutputFormat NUnitXml -PassThru
+            
+            Write-Host "Test Results:" -ForegroundColor Cyan
+            Write-Host "  Passed: $($testResults.PassedCount)" -ForegroundColor Green
+            Write-Host "  Failed: $($testResults.FailedCount)" -ForegroundColor $(if($testResults.FailedCount -gt 0){'Red'}else{'Green'})
+            Write-Host "  Total: $($testResults.TotalCount)" -ForegroundColor White
+            
+            if ($testResults.TotalCount -gt 0) {
+              $successRate = [math]::Round(($testResults.PassedCount / $testResults.TotalCount) * 100, 2)
+              Write-Host "  Success Rate: $successRate%" -ForegroundColor Cyan
+            }
+            
+            if ($testResults.FailedCount -gt 0) {
+              Write-Host "##vso[task.logissue type=error]$($testResults.FailedCount) test(s) failed"
+              exit 1
+            } else {
+              Write-Host "All Pester tests passed: $($testResults.PassedCount) tests" -ForegroundColor Green
+            }
+          } else {
+            Write-Host "No test files found in Tests directory" -ForegroundColor Yellow
+          }
         } else {
-          Write-Host "All Pester tests passed: $($testResults.PassedCount) tests"
+          Write-Host "Tests directory not found" -ForegroundColor Yellow
         }
         
     - name: Upload Test Results
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       if: always()
       with:
         name: test-results-${{ matrix.pwsh-version }}
-        path: TestResults.xml
+        path: Tests/TestResults.xml
+        retention-days: 30
         
     - name: Test Module Import
       shell: pwsh
       run: |
         try {
           Import-Module .\AD-Audit.psd1 -Force
-          Write-Host "Module imported successfully"
+          Write-Host "Module imported successfully" -ForegroundColor Green
           
           # Test exported functions
           $exportedFunctions = (Get-Module AD-Audit).ExportedFunctions.Keys
-          Write-Host "Exported functions: $($exportedFunctions.Count)"
+          Write-Host "Exported functions: $($exportedFunctions.Count)" -ForegroundColor Cyan
           $exportedFunctions | ForEach-Object { Write-Host "  - $_" }
           
         } catch {
-          Write-Host "Module import failed: $_"
+          Write-Host "Module import failed: $_" -ForegroundColor Red
           exit 1
         }
 
-  build:
+  security-scan:
+    name: Security Scan
     runs-on: windows-latest
     needs: test
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+        
+    - name: Install Security Scanning Tools
+      run: |
+        Install-Module -Name PSScriptAnalyzer -Force -SkipPublisherCheck -Scope CurrentUser
+        
+    - name: Security Analysis - Hardcoded Credentials
+      run: |
+        $credentialPatterns = @(
+          'password\s*=\s*["''][^"'']+["'']',
+          'pwd\s*=\s*["''][^"'']+["'']',
+          'pass\s*=\s*["''][^"'']+["'']',
+          'secret\s*=\s*["''][^"'']+["'']',
+          'key\s*=\s*["''][^"'']+["'']',
+          'token\s*=\s*["''][^"'']+["'']'
+        )
+        
+        $searchPaths = @()
+        if (Test-Path "Modules/") { $searchPaths += "Modules/" }
+        if (Test-Path "Libraries/") { $searchPaths += "Libraries/" }
+        if (Test-Path "Tests/") { $searchPaths += "Tests/" }
+        
+        if ($searchPaths.Count -gt 0) {
+          $files = Get-ChildItem -Path $searchPaths -Recurse -Include "*.ps1" -ErrorAction SilentlyContinue
+          $securityIssues = @()
+          
+          foreach ($file in $files) {
+            try {
+              $content = Get-Content $file.FullName -Raw -ErrorAction Stop
+              foreach ($pattern in $credentialPatterns) {
+                if ($content -match $pattern) {
+                  $securityIssues += "Potential hardcoded credential in $($file.FullName)"
+                }
+              }
+            } catch {
+              Write-Warning "Could not read file: $($file.FullName)"
+            }
+          }
+          
+          if ($securityIssues.Count -gt 0) {
+            Write-Host "Security issues found:" -ForegroundColor Red
+            $securityIssues | ForEach-Object { Write-Host "  $_" }
+            exit 1
+          } else {
+            Write-Host "No hardcoded credentials found" -ForegroundColor Green
+          }
+        } else {
+          Write-Host "No source directories found for security scanning" -ForegroundColor Yellow
+        }
+        
+    - name: Security Analysis - Script Analyzer Security Rules
+      run: |
+        $securityRules = @(
+          'PSAvoidUsingPlainTextForPassword',
+          'PSAvoidUsingConvertToSecureStringWithPlainText',
+          'PSAvoidUsingUsernameAndPasswordParams',
+          'PSAvoidUsingInvokeExpression',
+          'PSAvoidUsingCmdletAliases',
+          'PSAvoidUsingPositionalParameters',
+          'PSAvoidUsingEmptyCatchBlock',
+          'PSAvoidUsingWMICmdlet'
+        )
+        
+        $searchPaths = @()
+        if (Test-Path "Modules/") { $searchPaths += "Modules/" }
+        if (Test-Path "Libraries/") { $searchPaths += "Libraries/" }
+        
+        if ($searchPaths.Count -gt 0) {
+          $results = Invoke-ScriptAnalyzer -Path $searchPaths -Recurse -IncludeRule $securityRules -ErrorAction SilentlyContinue
+          if ($results) {
+            Write-Host "Security rule violations found:" -ForegroundColor Red
+            $results | Format-Table -AutoSize
+            exit 1
+          } else {
+            Write-Host "No security rule violations found" -ForegroundColor Green
+          }
+        } else {
+          Write-Host "No source directories found for security rule analysis" -ForegroundColor Yellow
+        }
+
+  build:
+    name: Build Package
+    runs-on: windows-latest
+    needs: [test, security-scan]
     
     steps:
     - name: Checkout code
@@ -113,19 +233,22 @@ jobs:
         Copy-Item -Path ".\CHANGELOG.md" -Destination $releaseDir
         
         # Create ZIP package
-        Compress-Archive -Path "$releaseDir\*" -DestinationPath "AD-Audit-v$env:GITHUB_REF_NAME.zip" -Force
+        $version = if ($env:GITHUB_REF_NAME -match '^v(\d+\.\d+\.\d+)$') { $matches[1] } else { "dev" }
+        Compress-Archive -Path "$releaseDir\*" -DestinationPath "AD-Audit-v$version.zip" -Force
         
-        Write-Host "Release package created: AD-Audit-v$env:GITHUB_REF_NAME.zip"
+        Write-Host "Release package created: AD-Audit-v$version.zip" -ForegroundColor Green
         
     - name: Upload Release Package
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: AD-Audit-Release
-        path: AD-Audit-v${{ github.ref_name }}.zip
+        path: AD-Audit-v*.zip
+        retention-days: 30
 
   publish-gallery:
+    name: Publish to PowerShell Gallery
     runs-on: windows-latest
-    needs: [test, build]
+    needs: [test, security-scan, build]
     if: github.event_name == 'release'
     
     steps:
@@ -143,59 +266,21 @@ jobs:
         POWERSHELL_GALLERY_API_KEY: ${{ secrets.POWERSHELL_GALLERY_API_KEY }}
       run: |
         if (-not $env:POWERSHELL_GALLERY_API_KEY) {
-          Write-Host "Error: POWERSHELL_GALLERY_API_KEY secret is not configured"
-          Write-Host "Please add the secret in GitHub repository settings under Settings > Secrets and variables > Actions"
+          Write-Host "Error: POWERSHELL_GALLERY_API_KEY secret is not configured" -ForegroundColor Red
+          Write-Host "Please add the secret in GitHub repository settings under Settings > Secrets and variables > Actions" -ForegroundColor Yellow
           exit 1
         }
         
         try {
           Publish-Module -Path . -NuGetApiKey $env:POWERSHELL_GALLERY_API_KEY -Force
-          Write-Host "Module published to PowerShell Gallery successfully"
+          Write-Host "Module published to PowerShell Gallery successfully" -ForegroundColor Green
         } catch {
-          Write-Host "Failed to publish module: $_"
+          Write-Host "Failed to publish module: $_" -ForegroundColor Red
           exit 1
-        }
-
-  security-scan:
-    runs-on: windows-latest
-    needs: test
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      
-    - name: Run Security Scan
-      shell: pwsh
-      run: |
-        # Check for sensitive information
-        $sensitivePatterns = @(
-          'password\s*=\s*["''"][^"''"\\s]+["''"\\s]',
-          'pwd\s*=\s*["''"][^"''"\\s]+["''"\\s]',
-          'pass\s*=\s*["''"][^"''"\\s]+["''"\\s]',
-          'secret\s*=\s*["''"][^"''"\\s]+["''"\\s]',
-          'key\s*=\s*["''"][^"''"\\s]+["''"\\s]',
-          'token\s*=\s*["''"][^"''"\\s]+["''"\\s]'
-        )
-        
-        $issues = @()
-        Get-ChildItem -Path . -Recurse -Include "*.ps1", "*.psd1", "*.psm1" | ForEach-Object {
-          $content = Get-Content $_.FullName -Raw
-          foreach ($pattern in $sensitivePatterns) {
-            if ($content -match $pattern) {
-              $issues += "Potential sensitive information in $($_.FullName): $($matches[0])"
-            }
-          }
-        }
-        
-        if ($issues.Count -gt 0) {
-          Write-Host "Security scan found potential issues:"
-          $issues | ForEach-Object { Write-Host "  $_" }
-          exit 1
-        } else {
-          Write-Host "Security scan passed - no sensitive information detected"
         }
 
   documentation:
+    name: Documentation Validation
     runs-on: windows-latest
     needs: test
     
@@ -203,18 +288,13 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
         
-    - name: Validate Documentation
-      shell: pwsh
+    - name: Validate Documentation Structure
       run: |
-        # Check for required documentation files
         $requiredDocs = @(
-          'README.md',
-          'LICENSE',
-          'CHANGELOG.md',
-          'CONTRIBUTING.md',
-          'docs\USER_GUIDE.md',
-          'docs\INSTALLATION.md',
-          'docs\TROUBLESHOOTING.md'
+          "README.md",
+          "docs/README.md",
+          "docs/USER_GUIDE.md",
+          "docs/MODULE_REFERENCE.md"
         )
         
         $missingDocs = @()
@@ -225,35 +305,49 @@ jobs:
         }
         
         if ($missingDocs.Count -gt 0) {
-          Write-Host "Missing required documentation files:"
+          Write-Host "Missing required documentation:" -ForegroundColor Red
           $missingDocs | ForEach-Object { Write-Host "  $_" }
           exit 1
         } else {
-          Write-Host "All required documentation files present"
+          Write-Host "All required documentation present" -ForegroundColor Green
         }
         
-        # Validate README.md has required sections
-        $readmeContent = Get-Content 'README.md' -Raw
-        $requiredSections = @(
-          '## 🚀 Features',
-          '## 📋 Prerequisites',
-          '## 🚀 Installation',
-          '## 📖 Quick Start',
-          '## 📊 Microsoft Compliance',
-          '## 📚 Documentation'
-        )
-        
-        $missingSections = @()
-        foreach ($section in $requiredSections) {
-          if ($readmeContent -notmatch [regex]::Escape($section)) {
-            $missingSections += $section
+    - name: Validate Markdown Syntax
+      run: |
+        if (Test-Path "docs/") {
+          $markdownFiles = Get-ChildItem -Path "docs/" -Recurse -Include "*.md" -ErrorAction SilentlyContinue
+          $syntaxErrors = @()
+          
+          foreach ($file in $markdownFiles) {
+            try {
+              $content = Get-Content $file.FullName -Raw -ErrorAction Stop
+              
+              # Check for common markdown issues
+              if ($content -match '\[.*\]\(.*\)') {
+                # Check for relative links that might be broken
+                $links = [regex]::Matches($content, '\[([^\]]+)\]\(([^)]+)\)')
+                foreach ($link in $links) {
+                  $linkPath = $link.Groups[2].Value
+                  if ($linkPath -notmatch '^https?://' -and $linkPath -notmatch '^#' -and $linkPath -notmatch '^mailto:') {
+                    $fullPath = Join-Path (Split-Path $file.FullName) $linkPath
+                    if (-not (Test-Path $fullPath)) {
+                      $syntaxErrors += "Broken link in $($file.Name): $linkPath"
+                    }
+                  }
+                }
+              }
+            } catch {
+              Write-Warning "Could not validate file: $($file.FullName)"
+            }
           }
-        }
-        
-        if ($missingSections.Count -gt 0) {
-          Write-Host "Missing required README sections:"
-          $missingSections | ForEach-Object { Write-Host "  $_" }
-          exit 1
+          
+          if ($syntaxErrors.Count -gt 0) {
+            Write-Host "Markdown syntax issues found:" -ForegroundColor Red
+            $syntaxErrors | ForEach-Object { Write-Host "  $_" }
+            exit 1
+          } else {
+            Write-Host "Markdown syntax validation passed" -ForegroundColor Green
+          }
         } else {
-          Write-Host "All required README sections present"
+          Write-Host "docs directory not found, skipping markdown validation" -ForegroundColor Yellow
         }

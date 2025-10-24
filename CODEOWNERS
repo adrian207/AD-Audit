@@ -14,6 +14,7 @@
 /.github/workflows/ @adrian207
 /.github/rulesets/ @adrian207
 /CODEOWNERS @adrian207
+/SECURITY.md @adrian207
 
 # Documentation requires technical review
 /docs/ @adrian207
@@ -28,3 +29,4 @@
 # Configuration files
 /azure-pipelines.yml @adrian207
 /Publish-ToGallery.ps1 @adrian207
+/AD-Audit.psd1 @adrian207
