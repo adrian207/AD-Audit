@@ -1,5 +1,17 @@
 # Security Policy
 
+> Executive summary: Report vulnerabilities privately and responsibly; we target fast triage and timely fixes for supported versions.
+>
+> Key recommendations:
+> - Do not open public issues for security findings
+> - Email the maintainer with version, environment, impact, and steps
+> - Use PGP if available; expect initial response within 48 hours
+>
+> Supporting points:
+> - Supported version matrix included
+> - Clear information checklist for reporters
+> - Target resolution timeline documented
+
 ## Supported Versions
 
 Use this section to tell people about which versions of your project are

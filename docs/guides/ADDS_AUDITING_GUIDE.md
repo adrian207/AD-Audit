@@ -1,5 +1,17 @@
 # AD DS Auditing Module Documentation
 
+> Executive summary: Enable high-fidelity AD DS auditing to track access and changes (old/new values) and strengthen investigation readiness across domain controllers.
+>
+> Key recommendations:
+> - Monitor 4662 and 5136–5141 events for access/change tracking
+> - Review SACLs on critical objects (Admins, DCs, Users, Computers)
+> - Baseline and alert on replication and schema auditing anomalies
+>
+> Supporting points:
+> - Implements Microsoft advanced auditing with value change tracking
+> - Analyzes SACL coverage, inheritance, and ACE effectiveness
+> - Surfaces replication events relevant to lateral movement detection
+
 ## Overview
 
 The AD DS Auditing module (`Invoke-ADDSAuditing.ps1`) provides comprehensive Active Directory Domain Services auditing based on the [Microsoft AD DS Auditing Step-by-Step Guide](https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-server-2008-R2-and-2008/cc731607(v=ws.10)). This module implements Microsoft's advanced auditing features including **old and new value tracking** for attribute changes, SACL analysis, and directory service change monitoring.

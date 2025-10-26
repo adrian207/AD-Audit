@@ -1,5 +1,17 @@
 # PowerShell Gallery Publishing Guide
 
+> Executive summary: Publish AD-Audit to the PowerShell Gallery reliably using the provided script—version, test, then push with your API key.
+>
+> Key recommendations:
+> - Use the publishing script for validation and upload
+> - Increment the module version and ensure tests pass
+> - Keep release notes and manifest metadata current
+>
+> Supporting points:
+> - Step-by-step prerequisites and manual commands included
+> - Pre-publish checklist prevents common failures
+> - Semantic versioning guidance and history table provided
+
 **Module**: AD-Audit  
 **Version**: 2.3.0  
 **Last Updated**: October 22, 2025  

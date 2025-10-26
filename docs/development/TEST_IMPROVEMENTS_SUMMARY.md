@@ -1,5 +1,17 @@
 # AD-Audit Test Suite Improvements Summary
 
+> Executive summary: Core AD audit tests now pass 100%; overall pass rate improved—focus next on SQLite, cloud modules, and integration.
+>
+> Key recommendations:
+> - Lock in core coverage and expand to cloud modules
+> - Stabilize integration tests with determinism and fixtures
+> - Use coverage data to target highest-value gaps
+>
+> Supporting points:
+> - Clear pass/fail matrices and achievements
+> - Prioritized next areas with impact
+> - Ties into CI reporting
+
 **Author**: Adrian Johnson <adrian207@gmail.com>  
 **Date**: October 23, 2025  
 **Project**: AD-Audit / M&A Technical Discovery

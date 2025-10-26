@@ -1,5 +1,17 @@
 # Incident Response Integration Guide
 
+> Executive summary: Tie audit findings to Microsoft Incident Response playbooks to detect, contain, and remediate threats automatically.
+>
+> Key recommendations:
+> - Enable playbook-driven workflows for common attack vectors
+> - Combine detection (events) with targeted remediation
+> - Isolate critical assets quickly and notify stakeholders
+>
+> Supporting points:
+> - Integrates phishing, password spray, consent abuse, and SMB compromise
+> - Aligns with Microsoft guidance and containment steps
+> - Provides prerequisite checks and example workflows
+
 ## Overview
 
 This guide integrates Microsoft's [Incident Response Playbooks](https://learn.microsoft.com/en-us/security/operations/incident-response-playbooks) with the AD-Audit remediation framework to provide automated threat containment and response capabilities.

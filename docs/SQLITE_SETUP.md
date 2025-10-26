@@ -1,5 +1,17 @@
 # SQLite Setup - Quick Fix
 
+> Executive summary: Fix missing SQLite dependencies in minutes using the automated setup, or install manually if needed.
+>
+> Key recommendations:
+> - Use the automated setup script when possible
+> - Download the correct architecture binaries if manual
+> - Verify DLL placement and loading before proceeding
+>
+> Supporting points:
+> - Step-by-step manual path provided with validation
+> - Works with the repo’s `Libraries` folder layout
+> - Includes quick verification commands
+
 **Error**: `SQLite library not found`
 
 ---

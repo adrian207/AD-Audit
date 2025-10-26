@@ -1,5 +1,17 @@
 # Web-Based Query Builder - Kestrel/HTTP.sys Analysis
 
+> Executive summary: Build the web query builder with Kestrel (ASP.NET Core) or Pode—both viable; choose based on licensing, time, and UI needs.
+>
+> Key recommendations:
+> - Prefer PowerShell Universal (Kestrel) for fastest path with rich UI
+> - Use Pode for free, PowerShell-native hosting with more manual UI work
+> - Keep security simple: read-only endpoints, auth where exposed externally
+>
+> Supporting points:
+> - Side-by-side pros/cons, effort, and sample code provided
+> - Cross-platform servers with modern UX
+> - Clear guidance for team and budget constraints
+
 **Author**: Adrian Johnson <adrian207@gmail.com>
 
 ---

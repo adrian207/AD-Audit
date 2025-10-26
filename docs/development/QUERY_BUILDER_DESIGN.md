@@ -1,5 +1,17 @@
 # Visual Query Builder - Effort Analysis
 
+> Executive summary: Deliver a ServiceNow-style visual query builder for the audit database to enable non-technical analysis with manageable effort.
+>
+> Key recommendations:
+> - Phase delivery: basic builder → saved queries → advanced filters
+> - Generate SQL safely; validate inputs to prevent injection
+> - Keep UX responsive with async queries and pagination
+>
+> Supporting points:
+> - Clear effort breakdown and ROI
+> - Schema-driven UI and reusable components
+> - Works with SQLite-backed datasets
+
 **Author**: Adrian Johnson <adrian207@gmail.com>
 
 ---

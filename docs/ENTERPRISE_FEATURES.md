@@ -1,5 +1,17 @@
 # Enterprise Features Guide
 
+> Executive summary: Ship AD-Audit like a product—use CI/CD, proper packaging, and notifications to operate reliably at scale.
+>
+> Key recommendations:
+> - Automate tests (Pester) and linting in CI
+> - Package modules for clean versioned distribution
+> - Send HTML completion emails to stakeholders
+>
+> Supporting points:
+> - Ready-made workflows and templates
+> - Artifacts and coverage reporting patterns
+> - Practical triggers and job breakdowns
+
 **Version**: 2.0.0  
 **Last Updated**: October 22, 2025  
 **Author**: Adrian Johnson

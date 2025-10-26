@@ -1,5 +1,17 @@
 # Troubleshooting Guide
 
+> Executive summary: Resolve common issues fast—check logs, verify permissions, confirm connectivity, and apply targeted fixes by category.
+>
+> Key recommendations:
+> - Start with the log and error text; note the first failure
+> - Verify permissions and execution policy early
+> - Use the category sections for precise remediations
+>
+> Supporting points:
+> - Includes copy-paste fixes and verification commands
+> - Covers installation, modules, connectivity, and runtime
+> - Maps errors to causes and resolution steps
+
 **Resolve common issues with the M&A Technical Discovery Script**
 
 **Author**: Adrian Johnson <adrian207@gmail.com>

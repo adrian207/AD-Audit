@@ -1,5 +1,17 @@
 # Module Reference
 
+> Executive summary: Technical reference for modules, parameters, outputs, and extensibility—use when scripting or integrating with CI/CD.
+>
+> Key recommendations:
+> - Use the reference to script reliable, repeatable runs
+> - Prefer documented parameters and outputs over internal functions
+> - Version your usage to specific releases for stability
+>
+> Supporting points:
+> - Architecture overview and execution flow
+> - Per-module function reference and output schemas
+> - Designed for advanced users and contributors
+
 **Technical API documentation for developers and advanced users**
 
 **Author**: Adrian Johnson <adrian207@gmail.com>

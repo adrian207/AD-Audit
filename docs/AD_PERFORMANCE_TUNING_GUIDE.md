@@ -1,5 +1,17 @@
 # Active Directory Performance Tuning Guide
 
+> Executive summary: Optimize AD performance by reducing query payloads, tuning domain controllers, and adopting client-side best practices.
+>
+> Key recommendations:
+> - Specify only required LDAP properties; avoid `Properties *`
+> - Monitor DC capacity and latency; right-size and tune hardware
+> - Parallelize safely and cache where appropriate
+>
+> Supporting points:
+> - Demonstrated network and memory reductions with targeted queries
+> - Clear before/after examples and metrics
+> - Maps to Microsoft performance tuning guidance
+
 **Version**: 2.1.0  
 **Date**: October 23, 2025  
 **Author**: Adrian Johnson <adrian207@gmail.com>

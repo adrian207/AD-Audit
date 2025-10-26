@@ -1,5 +1,17 @@
 # AD FS Security Audit Module Documentation
 
+> Executive summary: Assess AD FS security posture quickly—focus on authentication, authorization, RPT/CPT configuration, and sign-in experience to reduce risk.
+>
+> Key recommendations:
+> - Validate authentication providers and MFA/lockout configurations
+> - Review access control policies and device authentication
+> - Audit RPT/CPT trust settings and claim rules for least privilege
+>
+> Supporting points:
+> - Captures SSL, database, and farm configurations
+> - Surfaces encryption/signature algorithms and token settings
+> - Provides targeted examples for common audit scenarios
+
 ## Overview
 
 The AD FS Security Audit module (`Invoke-ADFSSecurityAudit.ps1`) provides comprehensive security auditing for Active Directory Federation Services (AD FS) based on the [Microsoft AD FS Operations documentation](https://learn.microsoft.com/en-us/windows-server/identity/ad-fs/ad-fs-operations). While Microsoft recommends migrating to Microsoft Entra ID, many organizations still have AD FS deployments that require security auditing.

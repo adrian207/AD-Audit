@@ -1,5 +1,17 @@
 # SMB Security Audit Module
 
+> Executive summary: Detect and remediate missing SMB signing/encryption across clients and servers to close critical lateral-movement and tampering gaps.
+>
+> Key recommendations:
+> - Require SMB signing where supported; enforce encryption on sensitive hosts
+> - Scan event logs (1001–1003) and registry baselines across servers
+> - Triage by severity and target high-risk servers first
+>
+> Supporting points:
+> - Correlates config, event logs, and client identity
+> - Exports CSV with severity to prioritize fixes
+> - Works by server list or database inventory
+
 ## Overview
 
 The `Invoke-SMBSecurityAudit.ps1` module provides comprehensive auditing capabilities to identify clients and servers that don't support SMB signing or encryption. This is critical for detecting security vulnerabilities and ensuring proper SMB security configuration across your environment.

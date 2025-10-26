@@ -1,5 +1,17 @@
 # Microsoft AD Security Best Practices Implementation Guide
 
+> Executive summary: Implement Microsoft AD security best practices with dedicated modules targeting credential theft, DC hardening, and account hygiene.
+>
+> Key recommendations:
+> - Detect permanently privileged/VIP accounts and reduce standing privilege
+> - Harden domain controllers and enforce secure admin hosts
+> - Monitor privileged usage and enforce temporary elevation patterns
+>
+> Supporting points:
+> - Purpose-built modules with parameterized scopes
+> - Examples provided for common scenarios
+> - Directly addresses gaps identified in the analysis
+
 ## Overview
 
 This guide documents the implementation of Microsoft's Active Directory Security Best Practices within the AD-Audit framework. The new security modules address critical gaps identified in the [Microsoft AD Security Gap Analysis](MICROSOFT_AD_SECURITY_GAPS.md).

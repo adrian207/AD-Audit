@@ -1,5 +1,17 @@
 # 🌐 Web-Based Query Builder - Quick Start
 
+> Executive summary: Launch a secure, read‑only web query builder for your audit database in minutes—no SQL required.
+>
+> Key recommendations:
+> - Install the Pode module and start the bundled web server
+> - Begin with templates; add filters for faster results
+> - Share on your network with -Address 0.0.0.0 and a firewall rule
+>
+> Supporting points:
+> - Multi-user, mobile-friendly UI with CSV export
+> - Real-time SQL preview with injection-safe generation
+> - Read-only enforcement and sensible timeouts by default
+
 **Modern, user-friendly query builder for your M&A audit database**
 
 ---
