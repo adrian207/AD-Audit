@@ -1,5 +1,17 @@
 # Advanced Analytics & Reporting Guide - v2.3.0
 
+> Executive summary: Turn audit data into insight—compare baselines, find anomalies, score risk, and publish executive dashboards with optional alerts.
+>
+> Key recommendations:
+> - Generate a baseline, then compare subsequent audits
+> - Enable alerts for thresholds tied to risk appetite
+> - Use dashboards for stakeholders; CSVs for deep dives
+>
+> Supporting points:
+> - Baseline comparison, trends, anomalies, and scoring
+> - Beautiful HTML dashboards + optional email alerts
+> - Works with SQLite-backed datasets
+
 **Release Date**: October 22, 2025  
 **Feature**: Option 4 - Advanced Analytics & Reporting  
 **Author**: Adrian Johnson  

@@ -1,5 +1,17 @@
 # SQLite In-Memory Database - Proof of Concept
 
+> Executive summary: Use SQLite to unlock cross-dataset analysis, faster queries, and advanced reports without breaking the CSV workflow.
+>
+> Key recommendations:
+> - Import CSVs into a SQLite database for joins and speed
+> - Use provided functions and schemas for consistency
+> - Keep CSV exports for compatibility while adopting DB-backed analysis
+>
+> Supporting points:
+> - Demonstrated advanced reports not feasible with CSV-only
+> - Significant performance gains for complex queries
+> - Works side-by-side with existing pipeline
+
 **Author**: Adrian Johnson <adrian207@gmail.com>  
 **Date**: October 21, 2024  
 **Version**: 1.0

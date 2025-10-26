@@ -1,5 +1,17 @@
 # Contributing to AD-Audit
 
+> Executive summary: Contribute safely and effectively—follow standards, add tests, pass lint, and propose changes via PR with clear scope.
+>
+> Key recommendations:
+> - Write Pester tests and pass PSScriptAnalyzer
+> - Use approved verbs and consistent naming
+> - Document functions and update relevant docs
+>
+> Supporting points:
+> - Dev setup scripts and examples provided
+> - CI validates tests and style
+> - Module import instructions included
+
 Thank you for your interest in contributing to the AD-Audit PowerShell module! We welcome contributions from the community and appreciate your help in making this project better.
 
 ## 🚀 **Getting Started**

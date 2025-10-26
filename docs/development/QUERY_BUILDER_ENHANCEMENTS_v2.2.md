@@ -1,5 +1,17 @@
 # Query Builder Enhancements - Version 2.2
 
+> Executive summary: Expand the query builder into a full analysis platform with saved queries, scheduling, sharing, and advanced filters.
+>
+> Key recommendations:
+> - Prioritize saved queries and sharing to boost adoption
+> - Add server-side paging and caching for performance
+> - Provide templates for common audit questions
+>
+> Supporting points:
+> - Feature list with usage guidance
+> - Persistent storage and UX improvements
+> - Integrates with existing web option
+
 **Release Date**: October 22, 2025  
 **Enhancement Type**: Option B - Web Query Builder Advanced Features  
 **Author**: Adrian Johnson

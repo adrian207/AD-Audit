@@ -1,5 +1,17 @@
 # Active Directory Security Gap Analysis
 
+> Executive summary: Identify where the framework diverges from Microsoft AD security best practices and prioritize closing the most critical gaps first.
+>
+> Key recommendations:
+> - Eliminate permanent privileged membership and protect VIP accounts
+> - Monitor privileged usage and credential theft indicators
+> - Enforce secure admin workstations and policy baselines
+>
+> Supporting points:
+> - Clear mapping to Microsoft guidance
+> - Gap list grouped by prevention/detection
+> - Actionable recommendations for each gap
+
 ## Overview
 
 Based on the [Microsoft Active Directory Security Best Practices](https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/plan/security-best-practices/best-practices-for-securing-active-directory), this document identifies critical gaps in our AD-Audit framework and provides recommendations for alignment with Microsoft's comprehensive security recommendations.

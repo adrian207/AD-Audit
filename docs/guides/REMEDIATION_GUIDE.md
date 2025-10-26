@@ -1,5 +1,17 @@
 # AD-Audit Remediation Scripts Documentation
 
+> Executive summary: Convert audit findings into prioritized, automated fixes across AD, servers, and Microsoft 365 with safety controls and reporting.
+>
+> Key recommendations:
+> - Start with Dry Run to preview changes and validate scope
+> - Prioritize Critical/High findings; schedule medium/low
+> - Use Master Orchestrator for end-to-end remediation and notifications
+>
+> Supporting points:
+> - Risk scoring, HTML notifications, and detailed logging
+> - Works across AD, server, and M365 domains
+> - Supports scheduling and enterprise rollout
+
 **Version**: 1.0.0  
 **Date**: October 22, 2025  
 **Author**: Adrian Johnson

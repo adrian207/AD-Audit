@@ -1,5 +1,17 @@
 # M&A Technical Discovery Script: Detailed Design Document
 
+> Executive summary: Architecture and design for a comprehensive Microsoft infrastructure audit toolset focused on security, migration risk, and reporting at M&A scale.
+>
+> Key recommendations:
+> - Keep modules cohesive and composable with clear contracts
+> - Optimize for performance (reduced properties, batching, caching)
+> - Maintain test coverage and follow approved patterns
+>
+> Supporting points:
+> - End-to-end data flow across AD, M365, and analytics
+> - Versioned outputs and reproducible runs
+> - Design aligns to Microsoft best practices
+
 ## Version History
 
 | Version | Date | Author | Changes |

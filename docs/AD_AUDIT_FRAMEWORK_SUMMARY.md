@@ -1,5 +1,17 @@
 # AD-Audit Framework Summary
 
+> Executive summary: AD-Audit provides end-to-end AD and infrastructure auditing with built-in remediation and reporting to accelerate security improvements.
+>
+> Key recommendations:
+> - Start with a baseline audit and review executive dashboards
+> - Prioritize remediation on privileged access, Kerberos, and ACL risks
+> - Integrate event monitoring for continuous detection
+>
+> Supporting points:
+> - Covers AD, servers, M365; produces CSV + HTML dashboards
+> - Includes automated remediation across core risk areas
+> - Aligns with Microsoft guidance for auditing and monitoring
+
 ## Overview
 
 The AD-Audit framework is a comprehensive **Active Directory** security auditing and remediation solution designed to identify and automatically fix common AD security issues in on-premises environments.

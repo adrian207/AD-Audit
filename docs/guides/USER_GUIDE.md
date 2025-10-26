@@ -1,5 +1,17 @@
 # User Guide
 
+> Executive summary: Learn how to operate AD-Audit via GUI or CLI, interpret reports, and adopt best practices for secure, repeatable audits.
+>
+> Key recommendations:
+> - Use GUI for discovery and CLI for automation/CI
+> - Protect output at rest (encrypted by default) and restrict access
+> - Iterate: run baseline, then compare over time with analytics
+>
+> Supporting points:
+> - Covers on-prem and Microsoft 365 with one toolchain
+> - Generates 5 HTML reports and 60+ CSVs for deep analysis
+> - Integrates with SQLite for cross-dataset queries
+
 **Complete usage guide for the M&A Technical Discovery Script**
 
 **Author**: Adrian Johnson <adrian207@gmail.com>

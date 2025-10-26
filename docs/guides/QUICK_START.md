@@ -1,5 +1,17 @@
 # Quick Start Guide
 
+> Executive summary: Run your first end-to-end audit in under an hour; start with the GUI, graduate to CLI for automation.
+>
+> Key recommendations:
+> - Use the GUI for first run to confirm permissions and scope
+> - Save output to a versioned folder (e.g., C:\Audits\YYYY-MM)
+> - Keep scope small initially; expand after verification
+>
+> Supporting points:
+> - Auto-installs required modules during first run
+> - Produces executive HTML dashboards and encrypted output
+> - Works across on-prem AD and Microsoft 365 in one pass
+
 **Get the M&A Technical Discovery Script running in 5 minutes.**
 
 ---

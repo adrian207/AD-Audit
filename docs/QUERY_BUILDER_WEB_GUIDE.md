@@ -1,5 +1,17 @@
 # Web-Based Query Builder - User Guide
 
+> Executive summary: Use the web query builder to explore the audit database visually—connect, select tables/columns, add filters, and export results.
+>
+> Key recommendations:
+> - Let the server auto-detect the latest database; specify a path if needed
+> - Use filters and column selection to keep queries fast
+> - Leverage templates for common questions; copy SQL when you need it
+>
+> Supporting points:
+> - Multi-user, remote access; CSV export built-in
+> - Safe SELECT-only execution with preview
+> - Works with mobile devices and modern browsers
+
 **Author**: Adrian Johnson <adrian207@gmail.com>
 
 ---

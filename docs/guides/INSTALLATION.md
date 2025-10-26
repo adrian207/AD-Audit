@@ -1,5 +1,17 @@
 # Installation Guide
 
+> Executive summary: Complete environment setup in 15–30 minutes so you can run your first audit with confidence.
+>
+> Key recommendations:
+> - Use a domain-joined admin workstation with PowerShell 7+ and stable network access
+> - Let required modules auto-install; avoid manual version pinning unless required
+> - Validate permissions and connectivity before full runs (DCs, servers, M365)
+>
+> Supporting points:
+> - Covers on-premises and Microsoft 365 prerequisites with verification steps
+> - Auto-installs Microsoft Graph, Exchange, SharePoint, Teams, and Power Platform modules
+> - Includes post-install checks and common pitfalls
+
 **Complete setup instructions for deploying the M&A Technical Discovery Script in your environment.**
 
 **Author**: Adrian Johnson <adrian207@gmail.com>

@@ -1,5 +1,17 @@
 # Event Monitoring Module Documentation
 
+> Executive summary: Monitor the right AD security events to detect threat activity early; prioritize high-criticality events and investigate volume anomalies.
+>
+> Key recommendations:
+> - Alert on high-criticality events (e.g., 4719, 4765/4766, 4964)
+> - Track medium-criticality spikes and unexpected patterns
+> - Align monitoring with Microsoft Appendix L baseline
+>
+> Supporting points:
+> - Categorizes events by investigation urgency
+> - Emphasizes policy, account, and trust changes
+> - Complements AD DS auditing for full coverage
+
 ## Overview
 
 The Event Monitoring module (`Invoke-EventMonitoring.ps1`) provides comprehensive security event monitoring based on [Microsoft Appendix L: Events to Monitor](https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/plan/appendix-l--events-to-monitor). This module implements Microsoft's recommendations for monitoring Active Directory security events to detect signs of compromise and security incidents.
