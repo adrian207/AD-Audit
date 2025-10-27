@@ -43,6 +43,7 @@ A comprehensive PowerShell module for Active Directory security auditing, remedi
 - ✅ **Privileged Account Usage Monitoring**: Tracks privileged account logon patterns
 - ✅ **Credential Exposure Detection**: Identifies potential credential exposure risks
 - ✅ **Administrative Host Security**: Verifies security of administrative workstations
+- ✅ **SID History Analysis**: Checks for SID history on privileged accounts (potential privilege escalation risk)
 
 #### **3. Domain Controller Security** (`Invoke-DomainControllerSecurity.ps1`)
 - ✅ **DC Hardening Verification**: Verifies domain controller security hardening

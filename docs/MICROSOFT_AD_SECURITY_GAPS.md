@@ -45,12 +45,14 @@ Based on the [Microsoft Active Directory Security Best Practices](https://learn.
 - ❌ **Privileged Account Usage Monitoring**: No tracking of privileged account logon patterns
 - ❌ **Credential Exposure Detection**: No detection of credential theft indicators
 - ❌ **Administrative Host Security**: No verification of secure administrative workstations
+- ❌ **SID History Detection**: No detection of SID history on privileged accounts
 
 **Microsoft Recommendations**:
 - Eliminate permanent membership in highly privileged groups
 - Implement controls to grant temporary membership in privileged groups
 - Prevent powerful accounts from being used on unauthorized systems
 - Implement secure administrative hosts
+- Remove SID history after domain migrations are complete
 
 #### **2. Domain Controller Security**
 **Microsoft Priority**: 🔴 **Critical**

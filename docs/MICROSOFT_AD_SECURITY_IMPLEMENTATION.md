@@ -28,6 +28,7 @@ This guide documents the implementation of Microsoft's Active Directory Security
 - **Privileged Account Usage Monitoring**: Tracks privileged account logon patterns
 - **Credential Exposure Detection**: Detects credential theft indicators
 - **Administrative Host Security**: Verifies secure administrative workstations
+- **SID History Analysis**: Checks for SID history on privileged accounts (potential privilege escalation risk)
 
 **Usage**:
 ```powershell
@@ -36,6 +37,9 @@ This guide documents the implementation of Microsoft's Active Directory Security
 
 # Focus on VIP accounts and privileged usage
 .\Invoke-CredentialTheftPrevention.ps1 -DatabasePath "C:\Audits\AuditData.db" -IncludeVIPAccounts -IncludePrivilegedUsage
+
+# Check for SID history on privileged accounts
+.\Invoke-CredentialTheftPrevention.ps1 -DatabasePath "C:\Audits\AuditData.db" -IncludeSIDHistory
 ```
 
 **Microsoft Compliance**: Addresses Microsoft's recommendations for:

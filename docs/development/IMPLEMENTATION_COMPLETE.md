@@ -26,6 +26,7 @@ We have successfully implemented comprehensive Microsoft Active Directory Securi
 - ✅ **Privileged Account Usage Monitoring**: Tracks privileged account logon patterns
 - ✅ **Credential Exposure Detection**: Detects credential theft indicators
 - ✅ **Administrative Host Security**: Verifies secure administrative workstations
+- ✅ **SID History Analysis**: Checks for SID history on privileged accounts (potential privilege escalation risk)
 
 #### **2. Domain Controller Security** (`Invoke-DomainControllerSecurity.ps1`)
 - ✅ **DC Hardening Verification**: Checks DC-specific security configurations

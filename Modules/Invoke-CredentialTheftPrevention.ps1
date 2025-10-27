@@ -56,6 +56,9 @@ param(
     [switch]$IncludeAdministrativeHosts,
     
     [Parameter(Mandatory = $false)]
+    [switch]$IncludeSIDHistory,
+    
+    [Parameter(Mandatory = $false)]
     [switch]$IncludeAll,
     
     [Parameter(Mandatory = $false)]
@@ -69,6 +72,7 @@ if ($IncludeAll) {
     $IncludeVIPAccounts = $true
     $IncludePrivilegedUsage = $true
     $IncludeAdministrativeHosts = $true
+    $IncludeSIDHistory = $true
 }
 
 #region Helper Functions
@@ -206,6 +210,99 @@ function Get-PermanentlyPrivilegedAccounts {
     }
     catch {
         Write-CredentialTheftLog "Failed to analyze permanently privileged accounts: $_" -Level Error
+        return @()
+    }
+}
+
+function Get-SIDHistoryAnalysis {
+    [CmdletBinding()]
+    param()
+    
+    Write-CredentialTheftLog "Analyzing SID history for privileged accounts..." -Level Info
+    
+    $sidHistoryFindings = @()
+    
+    try {
+        # Get all users with SID history
+        $allUsers = Get-ADUser -Filter * -Properties SIDHistory, DistinguishedName -ErrorAction SilentlyContinue
+        
+        foreach ($user in $allUsers) {
+            # Check if user has SID history
+            if ($user.SIDHistory -and $user.SIDHistory.Count -gt 0) {
+                # Get user's current groups to determine if privileged
+                $userGroups = Get-ADPrincipalGroupMembership -Identity $user.SamAccountName -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Name
+                
+                # Determine if account is privileged
+                $privilegedGroups = @('Domain Admins', 'Enterprise Admins', 'Schema Admins', 'Administrators', 'Account Operators', 'Backup Operators', 'Server Operators')
+                $isPrivileged = $false
+                $privilegedGroupList = @()
+                
+                foreach ($group in $privilegedGroups) {
+                    if ($userGroups -contains $group) {
+                        $isPrivileged = $true
+                        $privilegedGroupList += $group
+                    }
+                }
+                
+                # If privileged or if SID history indicates potential privilege escalation
+                if ($isPrivileged -or $userGroups) {
+                    # Analyze each SID in history
+                    foreach ($sid in $user.SIDHistory) {
+                        $domainSID = $null
+                        $domainName = "Unknown"
+                        
+                        # Try to resolve domain from SID
+                        try {
+                            $sidObj = [System.Security.Principal.SecurityIdentifier]$sid
+                            $sidString = $sidObj.ToString()
+                            
+                            # Extract domain SID (everything before the last RID)
+                            $ridIndex = $sidString.LastIndexOf('-')
+                            if ($ridIndex -gt 0) {
+                                $domainSID = $sidString.Substring(0, $ridIndex)
+                            }
+                        }
+                        catch {
+                            $domainSID = "Unable to parse"
+                        }
+                        
+                        # Determine risk level
+                        $riskLevel = 'High'
+                        $description = "SID History present on account"
+                        
+                        if ($isPrivileged -and $privilegedGroupList.Count -gt 0) {
+                            $riskLevel = 'Critical'
+                            $description = "SID History on privileged account with access to: $($privilegedGroupList -join ', ')"
+                        }
+                        
+                        $sidHistoryFindings += [PSCustomObject]@{
+                            AccountName = $user.Name
+                            SamAccountName = $user.SamAccountName
+                            DistinguishedName = $user.DistinguishedName
+                            SIDHistoryValue = $sid.ToString()
+                            DomainSID = $domainSID
+                            DomainName = $domainName
+                            IsPrivileged = $isPrivileged
+                            PrivilegedGroups = ($privilegedGroupList -join ', ')
+                            AllGroups = ($userGroups -join ', ')
+                            RiskLevel = $riskLevel
+                            Description = $description
+                            Recommendation = if ($isPrivileged) {
+                                "Review and remove SID history if migration is complete. Monitor account for suspicious activity."
+                            } else {
+                                "Review SID history to ensure it's legitimate. Consider removing if not needed."
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        Write-CredentialTheftLog "Found $($sidHistoryFindings.Count) SID history entries on accounts" -Level Success
+        return $sidHistoryFindings
+    }
+    catch {
+        Write-CredentialTheftLog "Failed to analyze SID history: $_" -Level Error
         return @()
     }
 }
@@ -542,6 +639,12 @@ try {
         $allResults += $adminHosts
     }
     
+    if ($IncludeSIDHistory) {
+        Write-CredentialTheftLog "Analyzing SID history for privileged accounts..." -Level Info
+        $sidHistory = Get-SIDHistoryAnalysis
+        $allResults += $sidHistory
+    }
+    
     # Process results
     foreach ($result in $allResults) {
         $summary.TotalIssues++
@@ -560,6 +663,7 @@ try {
             { $_ -in $vipAccounts } { 'VIP Accounts' }
             { $_ -in $usageAnalysis } { 'Privileged Usage' }
             { $_ -in $adminHosts } { 'Administrative Hosts' }
+            { $_ -in $sidHistory } { 'SID History' }
             { $_ -in $theftIndicators } { 'Credential Theft Indicators' }
             default { 'Other' }
         }
