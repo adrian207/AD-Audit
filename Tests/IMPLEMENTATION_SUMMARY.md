@@ -391,8 +391,7 @@ A complete, production-ready Pester testing framework has been implemented for y
 ---
 
 **Implementation Date**: October 22, 2025  
-**Author**: AI Assistant (Claude Sonnet 4.5)  
-**For**: Adrian Johnson  
+**Author**: Adrian Johnson <adrian207@gmail.com>  
 **Project**: Ad-Audit PowerShell Auditing Tool
 
 ## 🚀 Ready to Test!
