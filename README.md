@@ -1,7 +1,7 @@
 # AD-Audit PowerShell Module
 
 [![GitHub release](https://img.shields.io/github/release/adrian207/AD-Audit.svg)](https://github.com/adrian207/AD-Audit/releases)
-[![GitHub license](https://img.shieldsoplan.io/github/license/adrian207/AD-Audit.svg)](https://github.com/adrian207/AD-Audit/blob/main/LICENSE)
+[![GitHub license](https://img.shields.io/github/license/adrian207/AD-Audit.svg)](https://github.com/adrian207/AD-Audit/blob/main/LICENSE)
 [![GitHub stars](https://img.shields.io/github/stars/adrian207/AD-Audit.svg)](https://github.com/adrian207/AD-Audit/stargazers)
 [![GitHub forks](https://img.shields.io/github/forks/adrian207/AD-Audit.svg)](https://github.com/adrian207/AD-Audit/network)
 
