@@ -14,9 +14,9 @@
 
 ## Overview
 
-This guide documents the implementation of Microsoft's Active Directory Security Best Practices within the AD-Audit framework. The new security modules address critical gaps identified in the [Microsoft AD Security Gap Analysis](MICROSOFT_AD_SECURITY_GAPS.md).
+This guide documents the implementation of Microsoft's Active Directory Security Best Practices within the AD-Audit framework. The security modules address critical gaps identified in the [Microsoft AD Security Gap Analysis](MICROSOFT_AD_SECURITY_GAPS.md).
 
-## New Security Modules
+## Security Modules (8 Core + 2 New)
 
 ### 1. Credential Theft Prevention (`Invoke-CredentialTheftPrevention.ps1`)
 
@@ -174,6 +174,37 @@ The `Invoke-MasterRemediation.ps1` script has been updated to include all new se
 # Execute multiple security modules
 .\Invoke-MasterRemediation.ps1 -DatabasePath "C:\Audits\AuditData.db" -RemediationScope "DomainController,LeastPrivilege" -DryRun
 ```
+
+### 9. LAPS Audit (`Invoke-LAPS-Audit.ps1`) ⭐ **NEW in v3.1.0**
+
+**Purpose**: Comprehensive auditing and management of Local Administrator Password Solution (LAPS) deployment across all domain-joined computers.
+
+**Key Features**:
+- **LAPS Status Detection**: Scans all computers for LAPS installation and configuration
+- **Password Age Analysis**: Monitors password age and identifies stale passwords
+- **Expiration Detection**: Identifies expired LAPS passwords requiring immediate action
+- **Compliance Scoring**: Calculates overall LAPS compliance percentage and risk levels
+- **Password Reset Actions**: Force LAPS password rotation with dry-run support
+- **Bulk Operations**: Parallel processing for efficient bulk password resets
+- **Multiple Report Formats**: HTML, CSV, JSON, XML, Markdown with professional dashboards
+
+**Usage**:
+```powershell
+# Basic LAPS audit
+.\Invoke-LAPS-Audit.ps1 -DatabasePath "C:\Audits\AuditData.db"
+
+# Audit with all report formats
+.\Invoke-LAPS-Audit.ps1 -DatabasePath "C:\Audits\AuditData.db" -ReportFormat All
+
+# Audit with remediation (dry-run)
+.\Invoke-LAPS-Audit.ps1 -DatabasePath "C:\Audits\AuditData.db" -EnableRemediation -DryRun
+```
+
+**Microsoft Compliance**: Addresses Microsoft's recommendations for:
+- Managing local administrator passwords securely
+- Rotating passwords automatically on a schedule
+- Complying with CIS Controls 4 and 6
+- Implementing secure password storage and access control
 
 ## Implementation Priority
 

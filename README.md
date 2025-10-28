@@ -28,7 +28,7 @@ A comprehensive PowerShell module for Active Directory security auditing, remedi
 
 **Reference**: [Microsoft AD Performance Tuning Guidelines](https://learn.microsoft.com/en-us/windows-server/administration/performance-tuning/role/active-directory-server/)
 
-### **8 Comprehensive Security Modules**
+### **10 Comprehensive Security Modules**
 
 #### **1. Core Active Directory Auditing** (`Invoke-AD-Audit.ps1`)
 - ✅ **User Account Analysis**: Stale accounts, password policies, group memberships
@@ -93,6 +93,15 @@ A comprehensive PowerShell module for Active Directory security auditing, remedi
 - ✅ **Directory Service Replication Events**: Event IDs 4928-4939 monitoring
 - ✅ **SACL Analysis**: System Access Control List configuration analysis
 - ✅ **Schema Auditing Configuration**: Schema attribute auditing analysis
+
+#### **10. LAPS Audit** (`Invoke-LAPS-Audit.ps1`) ⭐ **NEW in v3.1.0**
+- ✅ **LAPS Status Detection**: Scans all computers for LAPS installation and configuration
+- ✅ **Password Age Analysis**: Monitors password age and identifies stale passwords
+- ✅ **Expiration Detection**: Identifies expired LAPS passwords requiring immediate action
+- ✅ **Compliance Scoring**: Calculates overall LAPS compliance percentage and risk levels
+- ✅ **Password Reset Actions**: Force LAPS password rotation with dry-run support
+- ✅ **Bulk Operations**: Parallel processing for efficient bulk password resets
+- ✅ **Multiple Report Formats**: HTML, CSV, JSON, XML, Markdown with professional dashboards
 
 ### **Master Orchestration**
 - ✅ **Unified Execution**: Single command execution across all modules
@@ -234,7 +243,7 @@ $EmailConfig = @{
 - **[Troubleshooting Guide](docs/TROUBLESHOOTING.md)** - Common issues and solutions
 
 ### **Module-Specific Documentation**
-- **[Credential Theft Prevention Guide](docs/CREDENTIAL_THEFT_PREVENTION_GUIDE.md)**
+- **[Credential Theft Prevention Guide](docs/CREDENTIAL_THEFT_PREVENTION_GUIDE.md)** ⭐ **Enhanced with SID History Detection**
 - **[Domain Controller Security Guide](docs/DOMAIN_CONTROLLER_SECURITY_GUIDE.md)**
 - **[Least Privilege Assessment Guide](docs/LEAST_PRIVILEGE_ASSESSMENT_GUIDE.md)**
 - **[Legacy System Management Guide](docs/LEGACY_SYSTEM_MANAGEMENT_GUIDE.md)**
@@ -242,7 +251,8 @@ $EmailConfig = @{
 - **[AD FS Security Audit Guide](docs/ADFS_SECURITY_AUDIT_GUIDE.md)**
 - **[Event Monitoring Guide](docs/EVENT_MONITORING_GUIDE.md)**
 - **[AD DS Auditing Guide](docs/ADDS_AUDITING_GUIDE.md)**
-- **[AD Performance Tuning Guide](docs/AD_PERFORMANCE_TUNING_GUIDE.md)** ⭐ **NEW in v2.1.0**
+- **[LAPS Audit Guide](docs/LAPS_AUDIT_GUIDE.md)** ⭐ **NEW in v3.1.0**
+- **[AD Performance Tuning Guide](docs/AD_PERFORMANCE_TUNING_GUIDE.md)**
 
 ## 🤝 **Contributing**
 
