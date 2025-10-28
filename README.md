@@ -1,9 +1,9 @@
 # AD-Audit PowerShell Module
 
-[![PowerShell Gallery](https://img.shields.io/powershellgallery/v/AD-Audit.svg)](https://www.powershellgallery.com/packages/AD-Audit)
-[![PowerShell Gallery](https://img.shields.io/powershellgallery/dt/AD-Audit.svg)](https://www.powershellgallery.com/packages/AD-Audit)
-[![GitHub release](https://img.shields.io/github/release/yourusername/AD-Audit.svg)](https://github.com/yourusername/AD-Audit/releases)
-[![GitHub license](https://img.shields.io/github/license/yourusername/AD-Audit.svg)](https://github.com/yourusername/AD-Audit/blob/main/LICENSE)
+[![GitHub release](https://img.shields.io/github/release/adrian207/AD-Audit.svg)](https://github.com/adrian207/AD-Audit/releases)
+[![GitHub license](https://img.shieldsoplan.io/github/license/adrian207/AD-Audit.svg)](https://github.com/adrian207/AD-Audit/blob/main/LICENSE)
+[![GitHub stars](https://img.shields.io/github/stars/adrian207/AD-Audit.svg)](https://github.com/adrian207/AD-Audit/stargazers)
+[![GitHub forks](https://img.shields.io/github/forks/adrian207/AD-Audit.svg)](https://github.com/adrian207/AD-Audit/network)
 
 A comprehensive PowerShell module for Active Directory security auditing, remediation, and monitoring based on Microsoft's official security best practices and **performance tuning guidelines**.
 
@@ -128,7 +128,7 @@ Install-Module -Name AD-Audit -Force
 ### **From GitHub**
 ```powershell
 # Clone the repository
-git clone https://github.com/yourusername/AD-Audit.git
+git clone https://github.com/adrian207/AD-Audit.git
 cd AD-Audit
 
 # Import the module
@@ -136,7 +136,7 @@ Import-Module .\AD-Audit.psd1
 ```
 
 ### **Manual Installation**
-1. Download the latest release from [GitHub Releases](https://github.com/yourusername/AD-Audit/releases)
+1. Download the latest release from [GitHub Releases](https://github.com/adrian207/AD-Audit/releases)
 2. Extract to your PowerShell modules directory
 3. Import the module: `Import-Module AD-Audit`
 
@@ -292,7 +292,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📞 **Support**
 
-- **GitHub Issues**: [Create an issue](https://github.com/yourusername/AD-Audit/issues)
+- **GitHub Issues**: [Create an issue](https://github.com/adrian207/AD-Audit/issues)
 - **Email**: adrian207@gmail.com
 - **Documentation**: [Full Documentation](docs/)
 
