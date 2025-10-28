@@ -69,7 +69,7 @@ param(
     [string]$OutputPath = "C:\Audits\LAPS",
     
     [Parameter(Mandatory = $false)]
-    [switch]$IncludeAll = $true,
+    [switch]$IncludeAll,
     
     [Parameter(Mandatory = $false)]
     [int]$PasswordAgeThreshold = 30,
@@ -95,6 +95,11 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+
+# Set default for IncludeAll if not specified
+if (-not $IncludeAll) {
+    $IncludeAll = $true
+}
 
 #region Helper Functions
 
@@ -208,11 +213,9 @@ function Get-LAPSStatus {
         foreach ($computer in $computers) {
             # Check if LAPS password exists
             $hasPassword = $false
-            $lapsPassword = $null
             
             if ($computer.'ms-Mcs-AdmPwd') {
                 $hasPassword = $true
-                $lapsPassword = $computer.'ms-Mcs-AdmPwd'
             }
             
             # Get expiration time
@@ -234,12 +237,12 @@ function Get-LAPSStatus {
             }
             
             # Determine if stale (age > threshold)
-            if ($passwordAge -ne $null -and [math]::Abs($passwordAge) -gt $PasswordAgeThreshold) {
+            if ($null -ne $passwordAge -and [math]::Abs($passwordAge) -gt $PasswordAgeThreshold) {
                 $isStale = $true
             }
             
             # Determine LAPS compliance
-            $lapsInstalled = $hasPassword -and $expirationTime -ne $null
+            $lapsInstalled = $hasPassword -and $null -ne $expirationTime
             $lapsCompliant = $lapsInstalled -and -not $isExpired
             
             # Calculate risk level
@@ -354,7 +357,7 @@ function Get-LAPSCompliance {
 #region Password Reset Actions
 
 function Reset-LAPSPassword {
-    [CmdletBinding()]
+    [CmdletBinding(SupportsShouldProcess)]
     param(
         [Parameter(Mandatory = $true)]
         [string]$ComputerName,
@@ -372,7 +375,7 @@ function Reset-LAPSPassword {
         Write-LAPSLog "Attempting to reset LAPS password for $ComputerName..." -Level Info
         
         # Method 1: Clear expiration to force LAPS to regenerate password
-        $computer = Get-ADComputer -Identity $ComputerName -Properties ms-Mcs-AdmPwdExpirationTime -ErrorAction Stop
+        $null = Get-ADComputer -Identity $ComputerName -Properties ms-Mcs-AdmPwdExpirationTime -ErrorAction Stop
         Set-ADComputer -Identity $ComputerName -Clear ms-Mcs-AdmPwdExpirationTime -ErrorAction Stop
         
         # Wait for LAPS to regenerate password (typically within 15 minutes)
@@ -386,7 +389,7 @@ function Reset-LAPSPassword {
 }
 
 function Reset-LAPSPasswordsBulk {
-    [CmdletBinding()]
+    [CmdletBinding(SupportsShouldProcess)]
     param(
         [Parameter(Mandatory = $true)]
         [array]$ComputerList,
@@ -468,10 +471,6 @@ function Export-LAPSReports {
     
     # Filter data for specific reports
     $allComputers = $LAPSData
-    $nonCompliant = $LAPSData | Where-Object { -not $_.LAPSCompliant }
-    $expired = $LAPSData | Where-Object { $_.IsExpired }
-    $stale = $LAPSData | Where-Object { $_.IsStale }
-    $missing = $LAPSData | Where-Object { -not $_.LAPSInstalled }
     
     foreach ($format in $ReportFormat) {
         try {
