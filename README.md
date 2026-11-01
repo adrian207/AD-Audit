@@ -16,7 +16,7 @@ PowerShell scripts for auditing an Active Directory environment and its connecte
 | `Modules/Invoke-Compliance-Audit.ps1` | Microsoft Purview compliance settings |
 
 **Security assessments** (run against the SQLite database the collection step creates, `-DatabasePath`):
-credential theft prevention, domain controller security, least privilege, legacy systems, advanced threat detection, AD FS, event monitoring, AD DS auditing, LAPS and SMB. Each is a script in `Modules/` named `Invoke-<Area>.ps1`.
+credential theft prevention, domain controller security, least privilege, legacy systems, advanced threat detection, AD FS, event monitoring, AD DS auditing, LAPS, SMB and Kerberos (delegation, KRBTGT password age, Kerberoastable accounts, missing pre-authentication). Each is a script in `Modules/` named `Invoke-<Area>.ps1`.
 
 **Remediation** (`Invoke-MasterRemediation.ps1`, plus AD, server and M365 remediation scripts) supports `-DryRun` to preview changes.
 

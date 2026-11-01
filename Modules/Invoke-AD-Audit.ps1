@@ -348,7 +348,7 @@ function Get-ADGroupInventory {
         # Optimized LDAP query - only request needed properties for better performance
         $requiredProperties = @(
             'Name', 'GroupScope', 'GroupCategory', 'Description', 'ManagedBy',
-            'Created', 'Modified', 'DistinguishedName', 'ObjectClass'
+            'Created', 'Modified', 'DistinguishedName', 'ObjectClass', 'Members'
         )
         
         $groups = Get-ADGroup -Filter * -Properties $requiredProperties |
@@ -359,7 +359,10 @@ function Get-ADGroupInventory {
                          @{N='ManagedBy';E={$_.ManagedBy}},
                          @{N='Created';E={$_.Created}},
                          @{N='Modified';E={$_.Modified}},
-                         @{N='MemberCount';E={($_ | Get-ADGroupMember | Measure-Object).Count}},
+                         # Direct members from the Members attribute fetched above; avoids one
+                         # Get-ADGroupMember call per group (slow, and it fails on groups that
+                         # contain foreign security principals)
+                         @{N='MemberCount';E={if ($_.Members) { @($_.Members).Count } else { 0 }}},
                          @{N='DistinguishedName';E={$_.DistinguishedName}}
         
         $groups | Export-Csv -Path (Join-Path $script:ADOutputPath "AD_Groups.csv") -NoTypeInformation
@@ -1679,7 +1682,9 @@ function Get-ServerEventLogs {
                              @{N='Message';E={
                                  $msg = $_.Group[0].Message
                                  if ($msg) {
-                                     ($msg -replace '[\r\n]+', ' ').Substring(0, [Math]::Min(500, $msg.Length))
+                                     # Measure the cleaned string: collapsing line breaks makes it shorter than $msg
+                                     $clean = $msg -replace '[\r\n]+', ' '
+                                     $clean.Substring(0, [Math]::Min(500, $clean.Length))
                                  } else {
                                      'No message'
                                  }
@@ -1708,7 +1713,9 @@ function Get-ServerEventLogs {
                              @{N='Message';E={
                                  $msg = $_.Group[0].Message
                                  if ($msg) {
-                                     ($msg -replace '[\r\n]+', ' ').Substring(0, [Math]::Min(500, $msg.Length))
+                                     # Measure the cleaned string: collapsing line breaks makes it shorter than $msg
+                                     $clean = $msg -replace '[\r\n]+', ' '
+                                     $clean.Substring(0, [Math]::Min(500, $clean.Length))
                                  } else {
                                      'No message'
                                  }
