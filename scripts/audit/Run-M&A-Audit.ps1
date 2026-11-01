@@ -205,6 +205,9 @@ param(
 
 #region Script Initialization
 
+# Repository root (this script lives in scripts\audit)
+$script:RepoRoot = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
+
 # Script metadata
 $script:ScriptVersion = "2.0"
 $script:ScriptAuthor = "Adrian Johnson <adrian207@gmail.com>"
@@ -1042,7 +1045,7 @@ try {
     Write-Host ""
     
     # Execute audit modules
-    $modulesPath = Join-Path $PSScriptRoot "Modules"
+    $modulesPath = Join-Path $script:RepoRoot "Modules"
     
     # Active Directory Module
     if (-not $SkipAD) {
@@ -1141,7 +1144,7 @@ try {
         Write-Host ""
         Write-Host "Creating SQLite database..." -ForegroundColor Cyan
         try {
-            $dbScript = Join-Path $PSScriptRoot "Libraries\SQLite-AuditDB.ps1"
+            $dbScript = Join-Path $script:RepoRoot "Libraries\SQLite-AuditDB.ps1"
             if (Test-Path $dbScript) {
                 . $dbScript  # Dot-source to load functions
                 
@@ -1172,7 +1175,7 @@ try {
     Write-Host ""
     Write-Host "Generating HTML reports..." -ForegroundColor Cyan
     try {
-        $reportScript = Join-Path $PSScriptRoot "Modules\New-AuditReport.ps1"
+        $reportScript = Join-Path $script:RepoRoot "Modules\New-AuditReport.ps1"
         if (Test-Path $reportScript) {
             & $reportScript -OutputFolder $script:AuditOutputFolder -CompanyName $CompanyName -ReportTitle $ReportTitle
             Write-AuditLog "HTML reports generated successfully" -Level Success
